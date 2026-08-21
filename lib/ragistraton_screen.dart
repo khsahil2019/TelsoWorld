@@ -279,7 +279,8 @@ class _MusicianRegistrationScreenState
           }
 
           if (!mounted) return;
-          Navigator.of(context).pushReplacementNamed(AppRoutes.main);
+          Navigator.of(context)
+              .pushReplacementNamed(AppRoutes.registrationSuccess);
         } else {
           _showDialog(
             'Registration Failed',
@@ -414,10 +415,10 @@ class _MusicianRegistrationScreenState
                       const SizedBox(height: 24),
 
                       // ── School / Organisation ──
-                      _FieldLabel('School / Organisation Name *'),
+                      _FieldLabel('Musician Name *'),
                       _CtrlField(
                         controller: _schoolNameCtrl,
-                        hint: 'e.g. ABC School',
+                        hint: 'e.g. ABC',
                       ),
 
                       // ── Mobile ──
@@ -466,7 +467,7 @@ class _MusicianRegistrationScreenState
                       ),
 
                       // ── Date of Birth ──
-                      _FieldLabel('Date of Birth *'),
+                      _FieldLabel('Happy birthday 🎂 Date*'),
                       GestureDetector(
                         onTap: _pickDob,
                         child: Container(

@@ -40,6 +40,9 @@ dependencies:
   # Networking
   http: ^1.2.2
 
+  # Share sheet (WhatsApp, etc.)
+  share_plus: ^10.1.4
+
   # State management / navigation
   get: ^4.6.6
 

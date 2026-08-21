@@ -864,22 +864,26 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
             maxAllowed: _maxReelDuration,
           ),
           const SizedBox(height: 12),
-          TrimViewer(
-            trimmer: _trimmer,
-            viewerHeight: 64,
-            viewerWidth: MediaQuery.of(context).size.width - 72,
-            maxVideoLength: _maxReelDuration,
-            onChangeStart: (value) {
-              _onTrimChanged(start: value, end: _trimEnd);
-            },
-            onChangeEnd: (value) {
-              _onTrimChanged(start: _trimStart, end: value);
-            },
-            onChangePlaybackState: (value) {
-              setState(() {
-                _isPlaying = value;
-              });
-            },
+          Padding(
+            // Extra left breathing space makes grabbing the start handle easier.
+            padding: const EdgeInsets.only(left: 14),
+            child: TrimViewer(
+              trimmer: _trimmer,
+              viewerHeight: 64,
+              viewerWidth: MediaQuery.of(context).size.width - 86,
+              maxVideoLength: _maxReelDuration,
+              onChangeStart: (value) {
+                _onTrimChanged(start: value, end: _trimEnd);
+              },
+              onChangeEnd: (value) {
+                _onTrimChanged(start: _trimStart, end: value);
+              },
+              onChangePlaybackState: (value) {
+                setState(() {
+                  _isPlaying = value;
+                });
+              },
+            ),
           ),
           const SizedBox(height: 12),
           Center(
@@ -1627,13 +1631,17 @@ class _ReelVideoEditorScreenState extends State<_ReelVideoEditorScreen> {
                     ],
                   ),
                 ),
-                TrimSlider(
-                  controller: _controller,
-                  height: 64,
-                  horizontalMargin: 24,
-                  child: TrimTimeline(
+                Padding(
+                  // Keep a little more left-side space near 00:00 handle.
+                  padding: const EdgeInsets.fromLTRB(18, 0, 12, 0),
+                  child: TrimSlider(
                     controller: _controller,
-                    padding: const EdgeInsets.only(top: 10),
+                    height: 64,
+                    horizontalMargin: 24,
+                    child: TrimTimeline(
+                      controller: _controller,
+                      padding: const EdgeInsets.fromLTRB(16, 10, 10, 0),
+                    ),
                   ),
                 ),
                 Padding(

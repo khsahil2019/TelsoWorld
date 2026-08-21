@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:telsoworld/app_routes.dart';
 import 'package:telsoworld/login_screen.dart';
 import 'package:telsoworld/ragistraton_screen.dart';
+import 'package:telsoworld/registration_success_screen.dart';
 import 'package:telsoworld/session_token_store.dart';
 
 import 'splash_screen.dart' show SplashScreen;
+import 'app_route_observer.dart';
 import 'bottom_nav_bar.dart';
 import 'home_screen.dart' show FeedScreen;
 import 'search_screen.dart' show DiscoveryScreen;
@@ -27,6 +29,7 @@ class TelsoWorldRootApp extends StatelessWidget {
     return MaterialApp(
       title: 'Telso World',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [telsoRouteObserver],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFD70F64)),
         useMaterial3: true,
@@ -37,6 +40,8 @@ class TelsoWorldRootApp extends StatelessWidget {
         AppRoutes.main: (_) => const RootBottomNavScreen(),
         AppRoutes.login: (_) => const LoginScreen(),
         AppRoutes.register: (_) => const MusicianRegistrationScreen(),
+        AppRoutes.registrationSuccess: (_) =>
+            const RegistrationSuccessScreen(),
       },
     );
   }
@@ -90,20 +95,6 @@ class RootBottomNavScreen extends StatefulWidget {
 class _RootBottomNavScreenState extends State<RootBottomNavScreen> {
   int _selectedIndex = 0;
 
-  late final List<Widget> _pages;
-
-  @override
-  void initState() {
-    super.initState();
-    _pages = const [
-      FeedScreen(), // Home
-      DiscoveryScreen(), // Search
-      SizedBox.shrink(), // Center "+" button placeholder
-      InboxScreen(), // Inbox
-      ProfileScreen(), // Profile
-    ];
-  }
-
   void _onNavTap(int index) {
     if (index == 2) {
       _openReelUploadScreen();
@@ -142,7 +133,19 @@ class _RootBottomNavScreenState extends State<RootBottomNavScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _pages),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          FeedScreen(
+            key: const ValueKey<Object>('telso_feed'),
+            visible: _selectedIndex == 0,
+          ),
+          const DiscoveryScreen(),
+          const SizedBox.shrink(),
+          const InboxScreen(),
+          const ProfileScreen(),
+        ],
+      ),
       bottomNavigationBar: TelsoBottomNavBar(
         selectedIndex: _selectedIndex,
         onTap: _onNavTap,

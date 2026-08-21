@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:share_plus/share_plus.dart';
 import 'package:telsoworld/session_token_store.dart';
 
 import 'login_screen.dart';
@@ -134,6 +138,147 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  /// Opens the system share sheet. If the app was hot-reloaded after adding
+  /// `share_plus`, native code may be missing — then we copy the link instead.
+  Future<void> _shareReferralUrl(String link) async {
+    try {
+      await Share.share(
+        link,
+        subject: 'Join me on Telso World',
+      );
+    } on MissingPluginException {
+      await Clipboard.setData(ClipboardData(text: link));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Link copied. Paste it in WhatsApp or another app.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      debugPrint(
+        'share_plus: stop the app and run a full rebuild (not hot reload) '
+        'so the native share sheet can register.',
+      );
+    } catch (e) {
+      final s = e.toString();
+      if (s.contains('MissingPluginException') ||
+          s.contains('dev.fluttercommunity.plus/share')) {
+        await Clipboard.setData(ClipboardData(text: link));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Link copied. Paste it in WhatsApp or another app.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        debugPrint(
+          'share_plus MissingPluginException: do a full app restart / '
+          'flutter run after flutter pub get.',
+        );
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not share: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _fetchAndShareReferralLink() async {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: CircularProgressIndicator(color: kPink),
+          ),
+        ),
+      ),
+    );
+
+    var loaderDismissed = false;
+    void dismissLoader() {
+      if (loaderDismissed || !mounted) return;
+      final nav = Navigator.of(context, rootNavigator: true);
+      if (nav.canPop()) {
+        nav.pop();
+        loaderDismissed = true;
+      }
+    }
+
+    try {
+      final token = await SessionTokenStore.getToken();
+      final response = await http
+          .get(
+            Uri.parse('https://telsoworld.com/api/reporter/referral'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 25));
+
+      if (!mounted) return;
+
+      if (response.statusCode != 200) {
+        dismissLoader();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not load referral link (${response.statusCode}).'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      final Map<String, dynamic> json =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      if (json['status'] != true) {
+        dismissLoader();
+        final msg = json['message']?.toString() ?? 'Referral request failed.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+        );
+        return;
+      }
+
+      final link = json['referral_link']?.toString().trim() ?? '';
+      if (link.isEmpty) {
+        dismissLoader();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No referral link returned.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      dismissLoader();
+      if (!mounted) return;
+      await _shareReferralUrl(link);
+    } catch (e) {
+      dismissLoader();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not load referral link: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,6 +381,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 builder: (_) => const WalletScreen(),
                               ),
                             );
+                          } else if (value == 'referral') {
+                            _fetchAndShareReferralLink();
                           }
                         },
                         icon: const Icon(
@@ -245,12 +392,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                         itemBuilder: (context) => const [
                           PopupMenuItem<String>(
-                            value: 'logout',
+                            value: 'referral',
                             child: Row(
                               children: [
-                                Icon(Icons.logout_rounded, size: 20),
+                                Icon(Icons.share_rounded, size: 20),
                                 SizedBox(width: 10),
-                                Text('Logout'),
+                                Text('Referral link'),
                               ],
                             ),
                           ),
@@ -264,6 +411,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 ),
                                 SizedBox(width: 10),
                                 Text('Wallet'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'logout',
+                            child: Row(
+                              children: [
+                                Icon(Icons.logout_rounded, size: 20),
+                                SizedBox(width: 10),
+                                Text('Logout'),
                               ],
                             ),
                           ),

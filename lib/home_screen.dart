@@ -6,6 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:telsoworld/ads_video_screen.dart';
+import 'package:telsoworld/app_route_observer.dart';
+import 'package:telsoworld/dashboard.dart';
+import 'package:telsoworld/uploaded_video_screen.dart';
+import 'package:telsoworld/updatedweb_link.dart';
 import 'package:telsoworld/session_token_store.dart';
 import 'package:video_player/video_player.dart';
 
@@ -24,6 +28,25 @@ String _normalizeVideoUrl(String rawPath) {
 
   final safePath = encoded.startsWith('/') ? encoded : '/$encoded';
   return Uri.https(_kApiHost, safePath).toString();
+}
+
+int _toInt(dynamic value, {int fallback = 0}) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+bool _toBool(dynamic value, {bool fallback = false}) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final normalized = value?.toString().trim().toLowerCase();
+  if (normalized == 'true' || normalized == '1' || normalized == 'liked') {
+    return true;
+  }
+  if (normalized == 'false' || normalized == '0' || normalized == 'unliked') {
+    return false;
+  }
+  return fallback;
 }
 
 List<Uri> _videoUriCandidates(String rawUrl) {
@@ -55,6 +78,10 @@ class VideoItem {
   final String videoPath;
   final int likesCount;
   final int sharesCount;
+  /// API: `"normal"` | `"ads"` (dashboard `video_type`).
+  final String videoType;
+  /// API: true => liked, false => not liked.
+  final bool liked;
 
   const VideoItem({
     required this.id,
@@ -63,6 +90,8 @@ class VideoItem {
     required this.videoPath,
     required this.likesCount,
     required this.sharesCount,
+    required this.videoType,
+    required this.liked,
   });
 
   factory VideoItem.fromJson(Map<String, dynamic> json) => VideoItem(
@@ -70,28 +99,118 @@ class VideoItem {
     subject: json['subject']?.toString() ?? '',
     name: json['name']?.toString() ?? 'Unknown',
     videoPath: _normalizeVideoUrl(json['video_path']?.toString() ?? ''),
-    likesCount: json['likes_count'] as int? ?? 0,
-    sharesCount: json['shares_count'] as int? ?? 0,
+    likesCount: _toInt(json['likes_count']),
+    sharesCount: _toInt(json['shares_count']),
+    videoType: json['video_type']?.toString() ?? 'normal',
+    liked: _toBool(json['liked']),
   );
+}
+
+class DashboardSetting {
+  final int id;
+  final String name;
+  final String fileUploaded;
+  final String? value;
+  final String updatedAt;
+
+  const DashboardSetting({
+    required this.id,
+    required this.name,
+    required this.fileUploaded,
+    required this.value,
+    required this.updatedAt,
+  });
+
+  factory DashboardSetting.fromJson(Map<String, dynamic> json) =>
+      DashboardSetting(
+        id: _toInt(json['id']),
+        name: json['name']?.toString() ?? '',
+        fileUploaded: json['file_uploaded']?.toString() ?? '',
+        value: json['value']?.toString(),
+        updatedAt: json['updated_at']?.toString() ?? '',
+      );
+}
+
+class CommentItem {
+  final int id;
+  final String comment;
+  final String user;
+  final int userId;
+  final String profileImage;
+  final int likes;
+  final bool isLiked;
+  final int replyCount;
+  final String createdAt;
+
+  const CommentItem({
+    required this.id,
+    required this.comment,
+    required this.user,
+    required this.userId,
+    required this.profileImage,
+    required this.likes,
+    required this.isLiked,
+    required this.replyCount,
+    required this.createdAt,
+  });
+
+  factory CommentItem.fromJson(Map<String, dynamic> json) => CommentItem(
+    id: _toInt(json['id']),
+    comment: json['comment']?.toString() ?? '',
+    user: json['user']?.toString() ?? 'Unknown',
+    userId: _toInt(json['user_id']),
+    profileImage: json['profile_image']?.toString() ?? '',
+    likes: _toInt(json['likes']),
+    isLiked: _toBool(json['is_liked']),
+    replyCount: _toInt(json['reply_count']),
+    createdAt: json['created_at']?.toString() ?? '',
+  );
+
+  CommentItem copyWith({
+    int? likes,
+    bool? isLiked,
+  }) {
+    return CommentItem(
+      id: id,
+      comment: comment,
+      user: user,
+      userId: userId,
+      profileImage: profileImage,
+      likes: likes ?? this.likes,
+      isLiked: isLiked ?? this.isLiked,
+      replyCount: replyCount,
+      createdAt: createdAt,
+    );
+  }
 }
 
 // ─────────────────────────────────────────
 // FeedScreen — root widget (used by main.dart)
 // ─────────────────────────────────────────
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key});
+  /// When false (e.g. another bottom tab is selected), feed videos pause.
+  const FeedScreen({super.key, this.visible = true});
+
+  final bool visible;
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class _FeedScreenState extends State<FeedScreen> with RouteAware {
   final Logger _logger = Logger();
+
+  bool _routeCovered = false;
+  bool _routeObserverSubscribed = false;
+  bool _menuOpen = false;
+
+  bool get _playbackActive => widget.visible && !_routeCovered;
 
   bool _isLoading = true;
   String? _error;
   List<VideoItem> _videos = [];
   String? _referralCode;
+  DashboardSetting? _setting;
 
   final PageController _pageController = PageController();
   int _currentPage = 0;
@@ -109,9 +228,31 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_routeObserverSubscribed) return;
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic>) {
+      telsoRouteObserver.subscribe(this, route);
+      _routeObserverSubscribed = true;
+    }
+  }
+
+  @override
   void dispose() {
+    telsoRouteObserver.unsubscribe(this);
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didPushNext() {
+    if (mounted) setState(() => _routeCovered = true);
+  }
+
+  @override
+  void didPopNext() {
+    if (mounted) setState(() => _routeCovered = false);
   }
 
   void _openAdsVideos() {
@@ -120,12 +261,25 @@ class _FeedScreenState extends State<FeedScreen> {
     ).push(MaterialPageRoute<void>(builder: (_) => const AdsVideoScreen()));
   }
 
+  void _toggleMenu() => setState(() => _menuOpen = !_menuOpen);
+
+  void _navigateTo(Widget screen) {
+    setState(() => _menuOpen = false);
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
+
   // ── API call ──────────────────────────────────────────────
-  Future<void> _fetchDashboard() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+  /// [isRefresh]: keep the feed visible, reload data, then jump back to the
+  /// same video index (clamped if the list shrinks).
+  Future<void> _fetchDashboard({bool isRefresh = false}) async {
+    final int restoreIndex = _currentPage;
+
+    if (!isRefresh) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
 
     try {
       final token = await SessionTokenStore.getToken();
@@ -157,25 +311,53 @@ class _FeedScreenState extends State<FeedScreen> {
 
         final bool status = json['status'] == true;
         if (status) {
+          final settingJson = json['setting'];
           final List<dynamic> rawVideos =
               json['videos'] as List<dynamic>? ?? [];
+          final newVideos = rawVideos
+              .map((v) => VideoItem.fromJson(v as Map<String, dynamic>))
+              .where((v) => v.videoPath.isNotEmpty)
+              .toList();
+
+          int targetPage = 0;
+          if (isRefresh && newVideos.isNotEmpty) {
+            targetPage = restoreIndex.clamp(0, newVideos.length - 1);
+          }
+
           setState(() {
             _referralCode = json['referral_code']?.toString();
-            _videos = rawVideos
-                .map((v) => VideoItem.fromJson(v as Map<String, dynamic>))
-                .where((v) => v.videoPath.isNotEmpty)
-                .toList();
+            _setting = settingJson is Map<String, dynamic>
+                ? DashboardSetting.fromJson(settingJson)
+                : null;
+            _videos = newVideos;
             _isLoading = false;
+            if (isRefresh && newVideos.isNotEmpty) {
+              _currentPage = targetPage;
+            }
           });
+
+          if (isRefresh && newVideos.isNotEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              if (_pageController.hasClients) {
+                _pageController.jumpToPage(targetPage);
+              }
+            });
+          }
         } else {
           setState(() {
-            _error = json['message']?.toString() ?? 'Failed to load feed.';
+            if (!isRefresh) {
+              _error = json['message']?.toString() ?? 'Failed to load feed.';
+            }
             _isLoading = false;
           });
         }
       } else {
         setState(() {
-          _error = 'Server error (${response.statusCode}). Pull down to retry.';
+          if (!isRefresh) {
+            _error =
+                'Server error (${response.statusCode}). Pull down to retry.';
+          }
           _isLoading = false;
         });
       }
@@ -183,7 +365,9 @@ class _FeedScreenState extends State<FeedScreen> {
       _logger.e('Dashboard error', error: e, stackTrace: st);
       if (!mounted) return;
       setState(() {
-        _error = 'Network error. Pull down to retry.\n$e';
+        if (!isRefresh) {
+          _error = 'Network error. Pull down to retry.\n$e';
+        }
         _isLoading = false;
       });
     }
@@ -206,15 +390,18 @@ class _FeedScreenState extends State<FeedScreen> {
             const _EmptyView()
           else
             RefreshIndicator(
-              onRefresh: _fetchDashboard,
+              onRefresh: () => _fetchDashboard(isRefresh: true),
               color: const Color(0xFFD70F64),
               child: PageView.builder(
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
                 itemCount: _videos.length,
                 onPageChanged: (i) => setState(() => _currentPage = i),
-                itemBuilder: (ctx, i) =>
-                    _VideoPage(video: _videos[i], isActive: i == _currentPage),
+                itemBuilder: (ctx, i) => _VideoPage(
+                  video: _videos[i],
+                  isActive: i == _currentPage && _playbackActive,
+                  onLikeSync: () => _fetchDashboard(isRefresh: true),
+                ),
               ),
             ),
 
@@ -224,6 +411,27 @@ class _FeedScreenState extends State<FeedScreen> {
             child: _TopBar(
               referralCode: _referralCode,
               onAdsTap: _openAdsVideos,
+              onMenuTap: _toggleMenu,
+              hasSettingVideo: (_setting?.fileUploaded ?? '').isNotEmpty,
+            ),
+          ),
+
+          // ── Dark backdrop when menu is open ──
+          if (_menuOpen)
+            GestureDetector(
+              onTap: _toggleMenu,
+              child: Container(color: Colors.black.withValues(alpha: 0.50)),
+            ),
+
+          // ── Slide-in side menu from the right ──
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            top: 90,
+            right: _menuOpen ? 12 : -260,
+            child: _SideMenu(
+              onClose: _toggleMenu,
+              onNavigate: _navigateTo,
             ),
           ),
         ],
@@ -315,8 +523,13 @@ class _EmptyView extends StatelessWidget {
 class _VideoPage extends StatefulWidget {
   final VideoItem video;
   final bool isActive;
+  final Future<void> Function() onLikeSync;
 
-  const _VideoPage({required this.video, required this.isActive});
+  const _VideoPage({
+    required this.video,
+    required this.isActive,
+    required this.onLikeSync,
+  });
 
   @override
   State<_VideoPage> createState() => _VideoPageState();
@@ -324,6 +537,7 @@ class _VideoPage extends StatefulWidget {
 
 class _VideoPageState extends State<_VideoPage>
     with SingleTickerProviderStateMixin {
+  final Logger _logger = Logger();
   VideoPlayerController? _controller;
   File? _cachedVideoFile;
   late AnimationController _heartController;
@@ -332,12 +546,15 @@ class _VideoPageState extends State<_VideoPage>
   bool _initialized = false;
   bool _hasError = false;
   bool _isLiked = false;
-  bool _showPlayIcon = false;
+  bool _isLiking = false;
+  int _likesCount = 0;
   int _heartAnimationRun = 0;
 
   @override
   void initState() {
     super.initState();
+    _likesCount = widget.video.likesCount;
+    _isLiked = widget.video.liked;
     _heartController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 260),
@@ -373,7 +590,10 @@ class _VideoPageState extends State<_VideoPage>
         }
         _controller = controller;
         setState(() => _initialized = true);
-        if (widget.isActive) controller.play();
+        if (widget.isActive) {
+          controller.play();
+          _callViewApi();
+        }
         return;
       } catch (networkError) {
         debugPrint(
@@ -391,7 +611,10 @@ class _VideoPageState extends State<_VideoPage>
         }
         _controller = controller;
         setState(() => _initialized = true);
-        if (widget.isActive) controller.play();
+        if (widget.isActive) {
+          controller.play();
+          _callViewApi();
+        }
         return;
       } catch (fallbackError) {
         debugPrint(
@@ -441,13 +664,148 @@ class _VideoPageState extends State<_VideoPage>
   @override
   void didUpdateWidget(covariant _VideoPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.video.id != widget.video.id) {
+      _likesCount = widget.video.likesCount;
+      _isLiked = widget.video.liked;
+    } else if (oldWidget.video.likesCount != widget.video.likesCount ||
+        oldWidget.video.liked != widget.video.liked) {
+      _likesCount = widget.video.likesCount;
+      _isLiked = widget.video.liked;
+    }
     final controller = _controller;
     if (!_initialized || controller == null) return;
     if (widget.isActive) {
       controller.play();
+      // Call view API only when the video first becomes visible (not on every rebuild).
+      if (!oldWidget.isActive) _callViewApi();
     } else {
       controller.pause();
       controller.seekTo(Duration.zero);
+    }
+  }
+
+  bool get _isAdsVideo =>
+      widget.video.videoType.toLowerCase().trim() == 'ads';
+
+  // Calls the correct view API based on video type.
+  // Normal video  → /api/reporter/normal-video/view
+  // Ads video     → /api/reporter/adsvideo/view
+  // Errors are silently ignored — view count is best-effort.
+  Future<void> _callViewApi() async {
+    try {
+      final token = await SessionTokenStore.getToken();
+      final endpoint = _isAdsVideo
+          ? 'https://telsoworld.com/api/reporter/adsvideo/view'
+          : 'https://telsoworld.com/api/reporter/normal-video/view';
+      await http
+          .post(
+            Uri.parse(endpoint),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'video_id': widget.video.id}),
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {
+      // View tracking is best-effort; do not disrupt playback on failure.
+    }
+  }
+
+  Future<void> _runHeartAnimation() async {
+    final int runId = ++_heartAnimationRun;
+    await _heartController.forward(from: 0);
+    await Future<void>.delayed(const Duration(milliseconds: 650));
+    if (!mounted || runId != _heartAnimationRun) return;
+    await _heartController.reverse();
+  }
+
+  Future<void> _toggleLike({
+    bool animateHeart = false,
+    bool forceLike = false,
+  }) async {
+    if (_isLiking) return;
+    if (forceLike && _isLiked) {
+      if (animateHeart) {
+        await _runHeartAnimation();
+      }
+      return;
+    }
+
+    final previousLiked = _isLiked;
+    final previousLikes = _likesCount;
+    final nextLiked = forceLike ? true : !previousLiked;
+    setState(() {
+      _isLiked = nextLiked;
+      _isLiking = true;
+      _likesCount = nextLiked
+          ? previousLikes + 1
+          : (previousLikes > 0 ? previousLikes - 1 : 0);
+    });
+
+    try {
+      final token = await SessionTokenStore.getToken();
+      final uri = _isAdsVideo
+          ? Uri.parse('https://telsoworld.com/api/reporter/adsvideo/like')
+          : Uri.parse('https://telsoworld.com/api/reporter/normal-video/like');
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'video_id': widget.video.id}),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) {
+        throw Exception('Like failed with status ${response.statusCode}');
+      }
+
+      final Map<String, dynamic> json =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      final apiLikeCount = (json['likes_count'] as num?)?.toInt();
+      if (!mounted) return;
+
+      setState(() {
+        if (_isAdsVideo) {
+          final apiStatus = json['status']?.toString().toLowerCase();
+          if (apiStatus == 'liked') {
+            _isLiked = true;
+          } else if (apiStatus == 'unliked') {
+            _isLiked = false;
+          }
+        } else {
+          final action = json['action']?.toString().toLowerCase();
+          if (action == 'liked') {
+            _isLiked = true;
+          } else if (action == 'unliked') {
+            _isLiked = false;
+          }
+        }
+        if (apiLikeCount != null) {
+          _likesCount = apiLikeCount;
+        }
+      });
+
+      if (animateHeart && _isLiked) await _runHeartAnimation();
+
+      // Keep UI always in sync with server-side likes.
+      await widget.onLikeSync();
+    } catch (e, st) {
+      _logger.e('Like toggle error', error: e, stackTrace: st);
+      if (!mounted) return;
+      setState(() {
+        _isLiked = previousLiked;
+        _likesCount = previousLikes;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLiking = false);
+      }
     }
   }
 
@@ -468,38 +826,28 @@ class _VideoPageState extends State<_VideoPage>
     super.dispose();
   }
 
-  void _onTap() {
-    final controller = _controller;
-    if (!_initialized || controller == null) return;
-    setState(() => _showPlayIcon = true);
-    if (controller.value.isPlaying) {
-      controller.pause();
-    } else {
-      controller.play();
-    }
-    Future.delayed(const Duration(milliseconds: 700), () {
-      if (mounted) setState(() => _showPlayIcon = false);
-    });
+  Future<void> _onVideoTapLike() async {
+    if (!_initialized || _controller == null) return;
+    await _toggleLike(animateHeart: true, forceLike: true);
   }
 
-  Future<void> _onDoubleTap() async {
-    if (!_isLiked && mounted) {
-      setState(() => _isLiked = true);
-    }
-
-    final int runId = ++_heartAnimationRun;
-    await _heartController.forward(from: 0);
-    await Future<void>.delayed(const Duration(milliseconds: 650));
-
-    if (!mounted || runId != _heartAnimationRun) return;
-    await _heartController.reverse();
+  Future<void> _openCommentsSheet() async {
+    final type = _isAdsVideo ? 'ads' : 'normal';
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CommentsBottomSheet(
+        videoId: widget.video.id,
+        videoType: type,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _onTap,
-      onDoubleTap: _onDoubleTap,
+      onTap: _onVideoTapLike,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -544,32 +892,6 @@ class _VideoPageState extends State<_VideoPage>
             ),
           ),
 
-          // ── Play/Pause icon flash ──
-          if (_showPlayIcon)
-            Center(
-              child: AnimatedOpacity(
-                opacity: _showPlayIcon ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 180),
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    (_initialized &&
-                            _controller != null &&
-                            _controller!.value.isPlaying)
-                        ? Icons.play_arrow_rounded
-                        : Icons.pause_rounded,
-                    color: Colors.white,
-                    size: 40,
-                  ),
-                ),
-              ),
-            ),
-
           // ── Double-tap like heart ──
           IgnorePointer(
             child: Center(
@@ -579,7 +901,7 @@ class _VideoPageState extends State<_VideoPage>
                   scale: _heartScale,
                   child: Icon(
                     Icons.favorite_rounded,
-                    color: Colors.white.withValues(alpha: 0.96),
+                    color: const Color(0xFFFF2D55).withValues(alpha: 0.95),
                     size: 108,
                     shadows: const [
                       Shadow(
@@ -600,9 +922,10 @@ class _VideoPageState extends State<_VideoPage>
             bottom: 110,
             child: _RightActions(
               isLiked: _isLiked,
-              likesCount: widget.video.likesCount,
+              likesCount: _likesCount,
               sharesCount: widget.video.sharesCount,
-              onLikeTap: () => setState(() => _isLiked = !_isLiked),
+              onLikeTap: () => _toggleLike(),
+              onCommentTap: _openCommentsSheet,
             ),
           ),
 
@@ -677,7 +1000,15 @@ class _VideoErrorPlaceholder extends StatelessWidget {
 class _TopBar extends StatelessWidget {
   final String? referralCode;
   final VoidCallback onAdsTap;
-  const _TopBar({this.referralCode, required this.onAdsTap});
+  final VoidCallback onMenuTap;
+  final bool hasSettingVideo;
+
+  const _TopBar({
+    this.referralCode,
+    required this.onAdsTap,
+    required this.onMenuTap,
+    required this.hasSettingVideo,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -705,17 +1036,10 @@ class _TopBar extends StatelessWidget {
             )
           else
             const SizedBox(width: 8),
-          const Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // _TabItem(label: 'Following', isActive: false),
-                // SizedBox(width: 28),
-                // _TabItem(label: 'For You', isActive: true),
-                const SizedBox(width: 28),
-              ],
-            ),
-          ),
+
+          const Expanded(child: SizedBox()),
+
+          // Ads Video button
           GestureDetector(
             onTap: onAdsTap,
             child: Container(
@@ -734,46 +1058,34 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          if (hasSettingVideo) ...[
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.verified_rounded,
+              color: Color(0xFFD70F64),
+              size: 18,
+            ),
+          ],
+
+          const SizedBox(width: 8),
+
+          // Menu toggle button — beside Ads Video
+          GestureDetector(
+            onTap: onMenuTap,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.menu_rounded, color: Colors.white, size: 22),
+            ),
+          ),
+
+          const SizedBox(width: 8),
           const Icon(Icons.search, color: Colors.white, size: 26),
         ],
       ),
-    );
-  }
-}
-
-class _TabItem extends StatelessWidget {
-  final String label;
-  final bool isActive;
-
-  const _TabItem({required this.label, required this.isActive});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: isActive
-                ? Colors.white
-                : Colors.white.withValues(alpha: 0.55),
-            fontSize: isActive ? 17 : 15,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
-          ),
-        ),
-        const SizedBox(height: 4),
-        if (isActive)
-          Container(
-            width: 24,
-            height: 2.5,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD70F64),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-      ],
     );
   }
 }
@@ -786,12 +1098,14 @@ class _RightActions extends StatefulWidget {
   final int likesCount;
   final int sharesCount;
   final VoidCallback onLikeTap;
+  final VoidCallback onCommentTap;
 
   const _RightActions({
     required this.isLiked,
     required this.likesCount,
     required this.sharesCount,
     required this.onLikeTap,
+    required this.onCommentTap,
   });
 
   @override
@@ -849,9 +1163,7 @@ class _RightActionsState extends State<_RightActions>
               icon: widget.isLiked
                   ? Icons.favorite_rounded
                   : Icons.favorite_border_rounded,
-              label: _fmt(
-                widget.isLiked ? widget.likesCount + 1 : widget.likesCount,
-              ),
+              label: _fmt(widget.likesCount),
               iconColor: widget.isLiked
                   ? const Color(0xFFD70F64)
                   : Colors.white,
@@ -861,7 +1173,13 @@ class _RightActionsState extends State<_RightActions>
         const SizedBox(height: 20),
 
         // Comment
-        const _ActionButton(icon: Icons.chat_bubble_rounded, label: '—'),
+        GestureDetector(
+          onTap: widget.onCommentTap,
+          child: const _ActionButton(
+            icon: Icons.chat_bubble_rounded,
+            label: 'Comment',
+          ),
+        ),
         const SizedBox(height: 20),
 
         // Share
@@ -997,6 +1315,1004 @@ class _SpinningDiscState extends State<_SpinningDisc>
           border: Border.all(color: const Color(0xFF444444), width: 6),
         ),
         child: const Icon(Icons.music_note, color: Colors.white, size: 16),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+// Comments Bottom Sheet
+// ─────────────────────────────────────────
+
+class _CommentsBottomSheet extends StatefulWidget {
+  final int videoId;
+  final String videoType; // normal | ads
+
+  const _CommentsBottomSheet({
+    required this.videoId,
+    required this.videoType,
+  });
+
+  @override
+  State<_CommentsBottomSheet> createState() => _CommentsBottomSheetState();
+}
+
+class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _isSending = false;
+  String? _error;
+  List<CommentItem> _comments = [];
+  int _currentPage = 1;
+  int _lastPage = 1;
+  final Set<int> _likingCommentIds = <int>{};
+  final Set<int> _deletingCommentIds = <int>{};
+  final TextEditingController _commentCtrl = TextEditingController();
+  final FocusNode _commentFocus = FocusNode();
+
+  bool get _hasMore => _currentPage < _lastPage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadComments(page: 1, reset: true);
+  }
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    _commentFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadComments({required int page, required bool reset}) async {
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    } else {
+      setState(() => _isLoadingMore = true);
+    }
+
+    try {
+      final token = await SessionTokenStore.getToken();
+      final uri = Uri.parse('https://telsoworld.com/api/comments');
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'video_id': widget.videoId,
+              'video_type': widget.videoType,
+              'page': page,
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+
+      if (response.statusCode != 200) {
+        throw Exception('Comments failed (${response.statusCode})');
+      }
+
+      final Map<String, dynamic> json =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      if (json['status'] != true) {
+        throw Exception(json['message']?.toString() ?? 'Failed to fetch comments');
+      }
+
+      final List<dynamic> data = json['data'] as List<dynamic>? ?? [];
+      final List<CommentItem> fetched = data
+          .map((e) => CommentItem.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      final pagination = json['pagination'] as Map<String, dynamic>? ?? {};
+      final fetchedCurrentPage = _toInt(pagination['current_page'], fallback: page);
+      final fetchedLastPage = _toInt(pagination['last_page'], fallback: page);
+
+      if (!mounted) return;
+      setState(() {
+        _currentPage = fetchedCurrentPage;
+        _lastPage = fetchedLastPage < 1 ? 1 : fetchedLastPage;
+        _comments = reset ? fetched : [..._comments, ...fetched];
+        _isLoading = false;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  Future<void> _submitComment() async {
+    final raw = _commentCtrl.text.trim();
+    if (raw.isEmpty || _isSending) return;
+
+    setState(() => _isSending = true);
+    try {
+      final token = await SessionTokenStore.getToken();
+      final uri = Uri.parse('https://telsoworld.com/api/comments/add');
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'comment': raw,
+              'video_id': widget.videoId,
+              'video_type': widget.videoType,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) {
+        throw Exception('Add comment failed (${response.statusCode})');
+      }
+
+      final Map<String, dynamic> json =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      if (json['status'] != true) {
+        throw Exception(json['message']?.toString() ?? 'Failed to add comment');
+      }
+
+      if (!mounted) return;
+      _commentCtrl.clear();
+      _commentFocus.unfocus();
+
+      // Refresh from server so list stays accurate with backend ordering/user.
+      await _loadComments(page: 1, reset: true);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Comment added'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Color(0xFFD70F64),
+          duration: Duration(milliseconds: 1200),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _toggleCommentLike(CommentItem comment) async {
+    if (_likingCommentIds.contains(comment.id)) return;
+
+    final previousLiked = comment.isLiked;
+    final previousLikes = comment.likes;
+    final optimisticLiked = !previousLiked;
+    final optimisticLikes = optimisticLiked
+        ? previousLikes + 1
+        : (previousLikes > 0 ? previousLikes - 1 : 0);
+
+    setState(() {
+      _likingCommentIds.add(comment.id);
+      _comments = _comments
+          .map((c) => c.id == comment.id
+              ? c.copyWith(isLiked: optimisticLiked, likes: optimisticLikes)
+              : c)
+          .toList();
+    });
+
+    try {
+      final token = await SessionTokenStore.getToken();
+      final response = await http
+          .post(
+            Uri.parse('https://telsoworld.com/api/comments/like'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'comment_id': comment.id}),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) {
+        throw Exception('Comment like failed (${response.statusCode})');
+      }
+
+      final Map<String, dynamic> json =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      if (json['status'] != true) {
+        throw Exception(json['message']?.toString() ?? 'Failed to update like');
+      }
+
+      final message = json['message']?.toString().toLowerCase() ?? '';
+      final bool? serverLiked = message.contains('unliked')
+          ? false
+          : message.contains('liked')
+              ? true
+              : null;
+
+      if (!mounted) return;
+      if (serverLiked != null && serverLiked != optimisticLiked) {
+        final correctedLikes = serverLiked
+            ? optimisticLikes + 1
+            : (optimisticLikes > 0 ? optimisticLikes - 1 : 0);
+        setState(() {
+          _comments = _comments
+              .map((c) => c.id == comment.id
+                  ? c.copyWith(isLiked: serverLiked, likes: correctedLikes)
+                  : c)
+              .toList();
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _comments = _comments
+            .map((c) => c.id == comment.id
+                ? c.copyWith(isLiked: previousLiked, likes: previousLikes)
+                : c)
+            .toList();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _likingCommentIds.remove(comment.id));
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteComment(CommentItem comment) async {
+    if (_deletingCommentIds.contains(comment.id)) return;
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Comment'),
+        content: const Text('Do you want to delete this comment?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    final previousComments = List<CommentItem>.from(_comments);
+    setState(() {
+      _deletingCommentIds.add(comment.id);
+      _comments = _comments.where((c) => c.id != comment.id).toList();
+    });
+
+    try {
+      final token = await SessionTokenStore.getToken();
+      final response = await http
+          .delete(
+            Uri.parse('https://telsoworld.com/api/comments/${comment.id}'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) {
+        throw Exception('Delete failed (${response.statusCode})');
+      }
+
+      final Map<String, dynamic> json =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      if (json['status'] != true) {
+        throw Exception(json['message']?.toString() ?? 'Failed to delete comment');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _comments = previousComments;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _deletingCommentIds.remove(comment.id));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.45,
+      maxChildSize: 0.95,
+      builder: (context, controller) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF121212),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 46,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white30,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Comments',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${_comments.length}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Divider(color: Colors.white12, height: 1),
+              Expanded(
+                child: _buildBody(controller),
+              ),
+              _buildComposer(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildComposer() {
+    final hasText = _commentCtrl.text.trim().isNotEmpty;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 160),
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: Colors.white12)),
+            color: Color(0xFF121212),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commentCtrl,
+                  focusNode: _commentFocus,
+                  minLines: 1,
+                  maxLines: 3,
+                  textInputAction: TextInputAction.send,
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => _submitComment(),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Add a comment...',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    filled: true,
+                    fillColor: Colors.white10,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: (!_isSending && hasText) ? _submitComment : null,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: (!_isSending && hasText)
+                        ? const Color(0xFFD70F64)
+                        : Colors.white24,
+                    shape: BoxShape.circle,
+                  ),
+                  child: _isSending
+                      ? const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(ScrollController controller) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFD70F64)),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white54, size: 42),
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton(
+                onPressed: () => _loadComments(page: 1, reset: true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD70F64),
+                ),
+                child: const Text('Retry', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_comments.isEmpty) {
+      return const Center(
+        child: Text(
+          'No comments yet',
+          style: TextStyle(color: Colors.white60, fontSize: 15),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: controller,
+      itemCount: _comments.length + 1,
+      itemBuilder: (context, index) {
+        if (index == _comments.length) {
+          if (!_hasMore) return const SizedBox(height: 10);
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: TextButton(
+                onPressed: _isLoadingMore
+                    ? null
+                    : () => _loadComments(page: _currentPage + 1, reset: false),
+                child: _isLoadingMore
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFFD70F64),
+                        ),
+                      )
+                    : const Text(
+                        'Load more',
+                        style: TextStyle(color: Color(0xFFD70F64)),
+                      ),
+              ),
+            ),
+          );
+        }
+
+        final item = _comments[index];
+        return ListTile(
+          leading: CircleAvatar(
+            radius: 19,
+            backgroundColor: Colors.white12,
+            backgroundImage: item.profileImage.isNotEmpty
+                ? NetworkImage(item.profileImage)
+                : null,
+            child: item.profileImage.isEmpty
+                ? const Icon(Icons.person, color: Colors.white70, size: 18)
+                : null,
+          ),
+          title: Text(
+            item.user,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 2),
+              Text(
+                item.comment,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text(
+                    item.createdAt,
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                  const SizedBox(width: 10),
+                  InkWell(
+                    onTap: _likingCommentIds.contains(item.id)
+                        ? null
+                        : () => _toggleCommentLike(item),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      child: _likingCommentIds.contains(item.id)
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFFD70F64),
+                              ),
+                            )
+                          : Icon(
+                              item.isLiked ? Icons.favorite : Icons.favorite_border,
+                              size: 14,
+                              color: item.isLiked
+                                  ? const Color(0xFFD70F64)
+                                  : Colors.white38,
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${item.likes}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                  const SizedBox(width: 10),
+                  InkWell(
+                    onTap: () => _openRepliesSheet(item),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      child: Text(
+                        '${item.replyCount} replies',
+                        style: const TextStyle(
+                          color: Color(0xFFD70F64),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          trailing: _deletingCommentIds.contains(item.id)
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFFD70F64),
+                  ),
+                )
+              : IconButton(
+                  onPressed: () => _confirmDeleteComment(item),
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54),
+                  tooltip: 'Delete comment',
+                ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        );
+      },
+    );
+  }
+
+  Future<void> _openRepliesSheet(CommentItem comment) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RepliesBottomSheet(
+        commentId: comment.id,
+        parentUser: comment.user,
+      ),
+    );
+  }
+}
+
+class _RepliesBottomSheet extends StatefulWidget {
+  final int commentId;
+  final String parentUser;
+
+  const _RepliesBottomSheet({
+    required this.commentId,
+    required this.parentUser,
+  });
+
+  @override
+  State<_RepliesBottomSheet> createState() => _RepliesBottomSheetState();
+}
+
+class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
+  bool _isLoading = true;
+  String? _error;
+  List<CommentItem> _replies = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReplies();
+  }
+
+  Future<void> _fetchReplies() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final token = await SessionTokenStore.getToken();
+      final response = await http
+          .get(
+            Uri.parse('https://telsoworld.com/api/comments/${widget.commentId}/replies'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) {
+        throw Exception('Replies failed (${response.statusCode})');
+      }
+
+      final Map<String, dynamic> json =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      if (json['status'] != true) {
+        throw Exception(json['message']?.toString() ?? 'Failed to fetch replies');
+      }
+
+      final data = json['data'] as List<dynamic>? ?? [];
+      final replies = data
+          .whereType<Map<String, dynamic>>()
+          .map(CommentItem.fromJson)
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _replies = replies;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.35,
+      maxChildSize: 0.9,
+      builder: (context, controller) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF121212),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 46,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white30,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Replies',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '@${widget.parentUser}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    ),
+                    Text(
+                      '${_replies.length}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Divider(color: Colors.white12, height: 1),
+              Expanded(child: _buildBody(controller)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(ScrollController controller) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFD70F64)),
+      );
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white54, size: 42),
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton(
+                onPressed: _fetchReplies,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD70F64),
+                ),
+                child: const Text('Retry', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_replies.isEmpty) {
+      return const Center(
+        child: Text(
+          'No replies yet',
+          style: TextStyle(color: Colors.white60, fontSize: 15),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: controller,
+      itemCount: _replies.length,
+      itemBuilder: (context, index) {
+        final item = _replies[index];
+        return ListTile(
+          leading: CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.white12,
+            backgroundImage:
+                item.profileImage.isNotEmpty ? NetworkImage(item.profileImage) : null,
+            child: item.profileImage.isEmpty
+                ? const Icon(Icons.person, color: Colors.white70, size: 17)
+                : null,
+          ),
+          title: Text(
+            item.user,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 2),
+              Text(
+                item.comment,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.createdAt,
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ],
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+// Side Slide Menu
+// ─────────────────────────────────────────
+
+class _SideMenu extends StatelessWidget {
+  final VoidCallback onClose;
+  final void Function(Widget screen) onNavigate;
+
+  const _SideMenu({required this.onClose, required this.onNavigate});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 240,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MenuItem(
+            label: 'Home',
+            icon: Icons.home_rounded,
+            gradientColors: const [Color(0xFF11C87B), Color(0xFF00E5A0)],
+            trailingIcon: Icons.tv_rounded,
+            onTap: onClose, // already on home, just close the menu
+          ),
+          const SizedBox(height: 12),
+          _MenuItem(
+            label: 'Dashboard',
+            icon: Icons.dashboard_rounded,
+            gradientColors: const [Color(0xFF6C3FC5), Color(0xFF9B59B6)],
+            trailingIcon: Icons.bar_chart_rounded,
+            onTap: () => onNavigate(const DashboardScreen()),
+          ),
+          const SizedBox(height: 12),
+          _MenuItem(
+            label: 'Upload Video',
+            icon: Icons.upload_rounded,
+            gradientColors: const [Color(0xFFD70F64), Color(0xFFFF6B9D)],
+            trailingIcon: Icons.video_library_rounded,
+            onTap: () => onNavigate(const UploadedVideoScreen()),
+          ),
+          const SizedBox(height: 12),
+          _MenuItem(
+            label: 'Update Web Link',
+            icon: Icons.link_rounded,
+            gradientColors: const [Color(0xFFFF8C00), Color(0xFFFFBF47)],
+            trailingIcon: Icons.open_in_new_rounded,
+            onTap: () => onNavigate(const UpdatedWebLinkScreen()),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final List<Color> gradientColors;
+  final IconData trailingIcon;
+  final VoidCallback onTap;
+
+  const _MenuItem({
+    required this.label,
+    required this.icon,
+    required this.gradientColors,
+    required this.trailingIcon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: gradientColors.first.withValues(alpha: 0.45),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Leading icon
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.20),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            // Label
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            // Trailing badge icon
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.20),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(trailingIcon, color: Colors.white, size: 16),
+            ),
+          ],
+        ),
       ),
     );
   }
