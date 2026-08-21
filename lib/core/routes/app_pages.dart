@@ -5,7 +5,7 @@ import 'package:telsoworld/controllers/profile_controller.dart';
 import 'package:telsoworld/controllers/upload_controller.dart';
 import 'package:telsoworld/controllers/wallet_controller.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
-import 'package:telsoworld/ragistraton_screen.dart';
+import 'package:telsoworld/views/auth/registration_view.dart';
 import 'package:telsoworld/views/auth/login_view.dart';
 import 'package:telsoworld/views/auth/registration_success_view.dart';
 import 'package:telsoworld/views/main_nav/main_nav_view.dart';

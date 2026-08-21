@@ -5,12 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
-import 'package:telsoworld/ads_video_screen.dart';
-import 'package:telsoworld/app_route_observer.dart';
-import 'package:telsoworld/dashboard.dart';
-import 'package:telsoworld/uploaded_video_screen.dart';
-import 'package:telsoworld/updatedweb_link.dart';
-import 'package:telsoworld/session_token_store.dart';
+import 'package:telsoworld/core/routes/app_route_observer.dart';
+import 'package:telsoworld/views/ads/ads_view.dart';
+import 'package:telsoworld/views/upload/uploaded_video_view.dart';
+import 'package:telsoworld/views/web_link/updated_web_link_view.dart';
+import 'package:telsoworld/core/services/storage_service.dart';
 import 'package:video_player/video_player.dart';
 
 const String _kApiHost = 'telsoworld.com';

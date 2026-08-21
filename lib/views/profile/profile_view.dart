@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
-import 'package:telsoworld/session_token_store.dart';
-
-import 'login_screen.dart';
-import 'wallet_screen.dart';
+import 'package:telsoworld/core/services/storage_service.dart';
+import 'package:telsoworld/views/auth/login_view.dart';
+import 'package:telsoworld/views/wallet/wallet_view.dart';
 
 void main() => runApp(const MyApp());
 

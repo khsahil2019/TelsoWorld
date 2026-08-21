@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:telsoworld/controllers/main_nav_controller.dart';
-import 'package:telsoworld/home_screen.dart';
-import 'package:telsoworld/inbox_screen.dart';
-import 'package:telsoworld/profile_screen.dart';
-import 'package:telsoworld/reel_upload_screen.dart';
-import 'package:telsoworld/search_screen.dart';
+import 'package:telsoworld/views/feed/feed_view.dart';
+import 'package:telsoworld/views/inbox/inbox_view.dart';
+import 'package:telsoworld/views/profile/profile_view.dart';
+import 'package:telsoworld/views/search/search_view.dart';
+import 'package:telsoworld/views/upload/reel_upload_view.dart';
 
 class MainNavView extends GetView<MainNavController> {
   const MainNavView({super.key});
