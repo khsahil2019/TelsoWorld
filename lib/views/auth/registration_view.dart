@@ -3,16 +3,21 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
+import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 
-const kPink = Color(0xFFD70F64);
-const kFieldBg = Color(0xFFFAF0F4);
-
+/// ---------------------------------------------------------------------------
+/// 📝 MusicianRegistrationScreen (3-Step Creator Wizard with Bottom Sheet Dropdowns)
+/// ---------------------------------------------------------------------------
+/// Step 1: 👤 Musician & Identity (Name, Username, Email, DOB)
+/// Step 2: 📍 Contact & Location (Mobile, WhatsApp, Searchable Bottom Sheet States/Districts)
+/// Step 3: 🔐 Security & Referral (Password, Referral Code, Terms & Submit)
+/// ---------------------------------------------------------------------------
 class MusicianRegistrationScreen extends StatefulWidget {
   const MusicianRegistrationScreen({super.key});
 
@@ -23,9 +28,9 @@ class MusicianRegistrationScreen extends StatefulWidget {
 
 class _MusicianRegistrationScreenState
     extends State<MusicianRegistrationScreen> {
-  // ── Form state ──────────────────────────────────────────
-  final _formKey = GlobalKey<FormState>();
+  final PageController _pageController = PageController();
   final Logger _logger = Logger();
+  int _currentStep = 0;
 
   bool _agreeTerms = false;
   bool _obscurePassword = true;
@@ -35,7 +40,7 @@ class _MusicianRegistrationScreenState
   String? _selectedDistrict;
   DateTime? _dob;
 
-  // ── Controllers  (key → API field name) ─────────────────
+  // Controllers
   final _schoolNameCtrl = TextEditingController(); // school_name
   final _mobileCtrl = TextEditingController(); // mobile_no
   final _whatsappCtrl = TextEditingController(); // whatsapp
@@ -46,7 +51,6 @@ class _MusicianRegistrationScreenState
   final _passwordCtrl = TextEditingController(); // password
   final _referralCtrl = TextEditingController(); // referral_code
 
-  // ── Static data ─────────────────────────────────────────
   final _states = [
     'Andhra Pradesh',
     'Arunachal Pradesh',
@@ -80,55 +84,95 @@ class _MusicianRegistrationScreenState
   ];
 
   final _districtsByState = <String, List<String>>{
-    'Rajasthan': ['Jodhpur', 'Jaipur', 'Udaipur', 'Kota', 'Ajmer', 'Bikaner'],
-    'Gujarat': ['Surat', 'Ahmedabad', 'Vadodara', 'Rajkot'],
-    'Maharashtra': ['Mumbai', 'Pune', 'Nashik', 'Nagpur'],
-    'Delhi': ['New Delhi', 'South Delhi', 'North Delhi', 'East Delhi'],
-    'Karnataka': ['Bengaluru', 'Mysuru', 'Hubballi', 'Mangaluru'],
-    'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Salem'],
-    'Uttar Pradesh': ['Lucknow', 'Agra', 'Varanasi', 'Kanpur'],
-    'West Bengal': ['Kolkata', 'Howrah', 'Siliguri', 'Durgapur'],
+    'Bihar': [
+      'Patna', 'Gaya', 'Bhagalpur', 'Muzaffarpur', 'Darbhanga', 'Purnia', 'Arrah (Bhojpur)',
+      'Begusarai', 'Katihar', 'Munger', 'Chhapra (Saran)', 'Saharsa', 'Sasaram (Rohtas)',
+      'Hajipur (Vaishali)', 'Dehri', 'Siwan', 'Motihari (East Champaran)', 'Nawada', 'Buxar',
+      'Kishanganj', 'Sitamarhi', 'Madhubani', 'Samastipur', 'Bettiah (West Champaran)'
+    ],
+    'Uttar Pradesh': [
+      'Lucknow', 'Varanasi', 'Kanpur', 'Agra', 'Prayagraj (Allahabad)', 'Gorakhpur', 'Noida (Gautam Buddha Nagar)',
+      'Ghaziabad', 'Meerut', 'Bareilly', 'Aligarh', 'Moradabad', 'Saharanpur', 'Jhansi', 'Ayodhya (Faizabad)',
+      'Mathura', 'Muzaffarnagar', 'Firozabad', 'Mirzapur', 'Basti', 'Azamgarh', 'Jaunpur', 'Ballia'
+    ],
+    'Rajasthan': [
+      'Jaipur', 'Jodhpur', 'Udaipur', 'Kota', 'Ajmer', 'Bikaner', 'Bhilwara', 'Alwar', 'Bharatpur',
+      'Sikar', 'Pali', 'Sri Ganganagar', 'Chittorgarh', 'Jhunjhunu', 'Barmer', 'Jaisalmer'
+    ],
+    'Gujarat': [
+      'Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar', 'Jamnagar', 'Junagadh', 'Gandhinagar',
+      'Anand', 'Navsari', 'Morbi', 'Mehsana', 'Bharuch', 'Porbandar', 'Valsad', 'Kutch'
+    ],
+    'Maharashtra': [
+      'Mumbai City', 'Mumbai Suburban', 'Pune', 'Nagpur', 'Nashik', 'Thane', 'Chhatrapati Sambhajinagar (Aurangabad)',
+      'Solapur', 'Amravati', 'Kolhapur', 'Navi Mumbai', 'Sangli', 'Jalgaon', 'Akola', 'Latur', 'Nanded'
+    ],
+    'Delhi': [
+      'New Delhi', 'Central Delhi', 'South Delhi', 'North Delhi', 'East Delhi', 'West Delhi',
+      'South West Delhi', 'North East Delhi', 'North West Delhi', 'Shahdara', 'South East Delhi'
+    ],
+    'Jharkhand': [
+      'Ranchi', 'Jamshedpur (East Singhbhum)', 'Dhanbad', 'Bokaro', 'Deoghar', 'Hazaribagh', 'Giridih',
+      'Ramgarh', 'Medininagar (Daltonganj)', 'Dumka', 'Chaibasa (West Singhbhum)', 'Koderma'
+    ],
+    'West Bengal': [
+      'Kolkata', 'Howrah', 'North 24 Parganas', 'South 24 Parganas', 'Siliguri (Darjeeling)',
+      'Durgapur (Paschim Bardhaman)', 'Asansol', 'Hooghly', 'Nadia', 'Murshidabad', 'Malda'
+    ],
+    'Madhya Pradesh': [
+      'Indore', 'Bhopal', 'Jabalpur', 'Gwalior', 'Ujjain', 'Sagar', 'Dewas', 'Satna', 'Ratlam', 'Rewa'
+    ],
+    'Haryana': [
+      'Gurugram', 'Faridabad', 'Panipat', 'Ambala', 'Yamunanagar', 'Rohtak', 'Hisar', 'Karnal', 'Sonipat', 'Panchkula'
+    ],
+    'Punjab': [
+      'Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala', 'Bathinda', 'Mohali (SAS Nagar)', 'Hoshiarpur', 'Pathankot'
+    ],
+    'Karnataka': [
+      'Bengaluru Urban', 'Bengaluru Rural', 'Mysuru', 'Hubballi-Dharwad', 'Mangaluru (Dakshina Kannada)',
+      'Belagavi', 'Kalaburagi', 'Davanagere', 'Ballari', 'Shivamogga', 'Tumakuru', 'Udupi'
+    ],
+    'Tamil Nadu': [
+      'Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tirunelveli', 'Tiruppur', 'Vellore', 'Erode'
+    ],
+    'Telangana': [
+      'Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar', 'Khammam', 'Ramagundam', 'Mahbubnagar', 'Nalgonda'
+    ],
+    'Andhra Pradesh': [
+      'Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Kurnool', 'Rajahmundry', 'Tirupati', 'Kakinada'
+    ],
+    'Odisha': [
+      'Bhubaneswar (Khurda)', 'Cuttack', 'Rourkela (Sundargarh)', 'Berhampur (Ganjam)', 'Sambalpur', 'Puri', 'Balasore'
+    ],
+    'Assam': [
+      'Guwahati (Kamrup Metro)', 'Silchar (Cachar)', 'Dibrugarh', 'Jorhat', 'Nagaon', 'Tinsukia', 'Tezpur (Sonitpur)'
+    ],
+    'Uttarakhand': [
+      'Dehradun', 'Haridwar', 'Roorkee', 'Haldwani (Nainital)', 'Rudrapur (Udham Singh Nagar)', 'Rishikesh', 'Almora'
+    ],
+    'Himachal Pradesh': [
+      'Shimla', 'Dharamshala (Kangra)', 'Mandi', 'Solan', 'Kullu', 'Baddi', 'Bilaspur', 'Hamirpur', 'Una'
+    ],
+    'Chhattisgarh': [
+      'Raipur', 'Bhilai (Durg)', 'Bilaspur', 'Korba', 'Rajnandgaon', 'Jagdalpur (Bastar)', 'Ambikapur (Surguja)'
+    ],
+    'Goa': ['North Goa (Panaji)', 'South Goa (Margao)'],
   };
 
-  List<String> get _districts =>
-      _selectedState != null ? (_districtsByState[_selectedState!] ?? []) : [];
-
-  String? _extractApiMessage(String responseBody) {
-    if (responseBody.trim().isEmpty) return null;
-
-    try {
-      final decoded = jsonDecode(responseBody);
-      if (decoded is Map<String, dynamic>) {
-        final message = decoded['message']?.toString().trim();
-        if (message != null && message.isNotEmpty) {
-          return message;
-        }
-      }
-    } catch (_) {
-      // Ignore invalid JSON and fall back to generic messaging.
-    }
-
-    return null;
-  }
-
-  String _messageForNetworkError(Object error) {
-    if (error is TimeoutException) {
-      return 'Server is taking too long to respond. Please try again.';
-    }
-    if (error is SocketException) {
-      return 'Unable to reach the server. Please check your internet connection and try again.';
-    }
-    if (error is HandshakeException) {
-      return 'Secure connection to the server failed. Please try again in a moment.';
-    }
-    if (error is FormatException) {
-      return 'The server returned invalid data. Please try again later.';
-    }
-    return 'Something went wrong while contacting the server. Please try again.';
+  List<String> get _districts {
+    if (_selectedState == null) return [];
+    return _districtsByState[_selectedState!] ?? [
+      'Central District',
+      'North District',
+      'South District',
+      'East District',
+      'West District',
+    ];
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     _schoolNameCtrl.dispose();
     _mobileCtrl.dispose();
     _whatsappCtrl.dispose();
@@ -141,16 +185,25 @@ class _MusicianRegistrationScreenState
     super.dispose();
   }
 
-  // ── DOB helper ───────────────────────────────────────────
+  // ── Validation Helpers ──
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    return emailRegex.hasMatch(email.trim());
+  }
+
+  bool _isValidMobile(String phone) {
+    final clean = phone.replaceAll(RegExp(r'\D'), '');
+    return (clean.length == 10 && RegExp(r'^[6-9]\d{9}$').hasMatch(clean)) ||
+        (clean.length == 12 && clean.startsWith('91') && RegExp(r'^91[6-9]\d{9}$').hasMatch(clean));
+  }
+
   String get _dobDisplay => _dob == null
-      ? 'Select date of birth'
-      : '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-'
-            '${_dob!.day.toString().padLeft(2, '0')}';
+      ? 'Select Date of Birth'
+      : '${_dob!.day.toString().padLeft(2, '0')}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.year}';
 
   String get _dobApi => _dob == null
       ? ''
-      : '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-'
-            '${_dob!.day.toString().padLeft(2, '0')}';
+      : '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.day.toString().padLeft(2, '0')}';
 
   Future<void> _pickDob() async {
     final d = await showDatePicker(
@@ -159,8 +212,14 @@ class _MusicianRegistrationScreenState
       firstDate: DateTime(1950),
       lastDate: DateTime.now(),
       builder: (ctx, child) => Theme(
-        data: ThemeData.light().copyWith(
-          colorScheme: const ColorScheme.light(primary: kPink),
+        data: ThemeData.dark().copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.primaryPink,
+            onPrimary: Colors.white,
+            surface: Color(0xFF1E1E28),
+            onSurface: Colors.white,
+          ),
+          dialogBackgroundColor: const Color(0xFF181822),
         ),
         child: child!,
       ),
@@ -168,41 +227,111 @@ class _MusicianRegistrationScreenState
     if (d != null) setState(() => _dob = d);
   }
 
-  // ── API call ─────────────────────────────────────────────
-  Future<void> _register() async {
-    // Basic validation
-    if (!_agreeTerms) {
-      _showDialog(
-        'Error',
-        'Please agree to the Terms & Conditions to continue.',
-      );
+  void _showError(String message) {
+    Get.snackbar(
+      'Validation Error',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: const Color(0xFF1E1E24),
+      colorText: const Color(0xFFFF6584),
+      margin: const EdgeInsets.all(16),
+      icon: const Icon(Icons.error_outline_rounded, color: Color(0xFFFF6584)),
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  void _goToStep(int step) {
+    setState(() => _currentStep = step);
+    _pageController.animateToPage(
+      step,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  // ── Step 1 Validation ──
+  void _validateStep1AndNext() {
+    final name = _schoolNameCtrl.text.trim();
+    final username = _usernameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+
+    if (name.isEmpty) {
+      _showError('Please enter your Musician / Channel Name.');
+      return;
+    }
+    if (name.length < 2) {
+      _showError('Musician / Channel Name must be at least 2 characters.');
+      return;
+    }
+    if (username.isEmpty) {
+      _showError('Please choose a unique username.');
+      return;
+    }
+    if (username.length < 3) {
+      _showError('Username must be at least 3 characters.');
+      return;
+    }
+    if (username.contains(' ')) {
+      _showError('Username cannot contain spaces.');
+      return;
+    }
+    if (email.isEmpty) {
+      _showError('Please enter your email address.');
+      return;
+    }
+    if (!_isValidEmail(email)) {
+      _showError('Please enter a valid email address (e.g. yourname@gmail.com).');
       return;
     }
     if (_dob == null) {
-      _showDialog('Error', 'Please select your date of birth.');
+      _showError('Please select your Date of Birth.');
       return;
     }
-    if (_selectedState == null || _selectedDistrict == null) {
-      _showDialog('Error', 'Please select your State and District.');
-      return;
-    }
+    _goToStep(1);
+  }
 
-    // Field-level validation
-    final fields = {
-      'School / Organisation Name': _schoolNameCtrl.text.trim(),
-      'Mobile Number': _mobileCtrl.text.trim(),
-      'WhatsApp Number': _whatsappCtrl.text.trim(),
-      'Email': _emailCtrl.text.trim(),
-      'Village/Mohalla': _villageCtrl.text.trim(),
-      'Pincode': _pincodeCtrl.text.trim(),
-      'Username': _usernameCtrl.text.trim(),
-      'Password': _passwordCtrl.text,
-    };
-    for (final entry in fields.entries) {
-      if (entry.value.isEmpty) {
-        _showDialog('Error', '${entry.key} cannot be empty.');
-        return;
-      }
+  // ── Step 2 Validation ──
+  void _validateStep2AndNext() {
+    final mobile = _mobileCtrl.text.trim();
+    final whatsapp = _whatsappCtrl.text.trim();
+    final pincode = _pincodeCtrl.text.trim();
+
+    if (mobile.isEmpty) {
+      _showError('Please enter your mobile number.');
+      return;
+    }
+    if (!_isValidMobile(mobile)) {
+      _showError('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).');
+      return;
+    }
+    if (whatsapp.isNotEmpty && !_isValidMobile(whatsapp)) {
+      _showError('Please enter a valid 10-digit WhatsApp number or leave it blank.');
+      return;
+    }
+    if (_selectedState == null) {
+      _showError('Please select your State.');
+      return;
+    }
+    if (_selectedDistrict == null) {
+      _showError('Please select your District.');
+      return;
+    }
+    if (pincode.isNotEmpty && pincode.length != 6) {
+      _showError('Please enter a valid 6-digit Pincode.');
+      return;
+    }
+    _goToStep(2);
+  }
+
+  // ── Final Registration API ──
+  Future<void> _register() async {
+    if (_passwordCtrl.text.isEmpty || _passwordCtrl.text.length < 4) {
+      _showError('Password must be at least 4 characters long.');
+      return;
+    }
+    if (!_agreeTerms) {
+      _showError('Please agree to the Terms & Conditions to complete registration.');
+      return;
     }
 
     setState(() => _isLoading = true);
@@ -210,27 +339,26 @@ class _MusicianRegistrationScreenState
     try {
       final uri = Uri.parse('https://telsoworld.com/api/reporter/register');
 
-      // API expects x-www-form-urlencoded
+      final cleanMobile = _mobileCtrl.text.trim().replaceAll(RegExp(r'\D'), '');
+      final cleanWhatsapp = _whatsappCtrl.text.trim().replaceAll(RegExp(r'\D'), '');
+
       final body = {
         'school_name': _schoolNameCtrl.text.trim(),
-        'mobile_no': _mobileCtrl.text.trim(),
-        'whatsapp': _whatsappCtrl.text.trim(),
-        'email': _emailCtrl.text.trim(),
-        'village': _villageCtrl.text.trim(),
-        'pincode': _pincodeCtrl.text.trim(),
+        'mobile_no': cleanMobile.length == 12 ? cleanMobile.substring(2) : cleanMobile,
+        'whatsapp': cleanWhatsapp.isNotEmpty
+            ? (cleanWhatsapp.length == 12 ? cleanWhatsapp.substring(2) : cleanWhatsapp)
+            : (cleanMobile.length == 12 ? cleanMobile.substring(2) : cleanMobile),
+        'email': _emailCtrl.text.trim().toLowerCase(),
+        'village': _villageCtrl.text.trim().isNotEmpty ? _villageCtrl.text.trim() : 'City',
+        'pincode': _pincodeCtrl.text.trim().isNotEmpty ? _pincodeCtrl.text.trim() : '110001',
         'dob': _dobApi,
         'district': _selectedDistrict!,
         'state': _selectedState!,
         'terms': '1',
-        'username': _usernameCtrl.text.trim(),
+        'username': _usernameCtrl.text.trim().toLowerCase(),
         'password': _passwordCtrl.text,
         'referral_code': _referralCtrl.text.trim(),
       };
-
-      // Safe logging for request (mask sensitive fields like password)
-      final logBody = Map<String, dynamic>.from(body)
-        ..update('password', (value) => '***', ifAbsent: () => '***');
-      _logger.i('Register request → $uri\nParams: ${jsonEncode(logBody)}');
 
       final response = await http
           .post(
@@ -243,16 +371,6 @@ class _MusicianRegistrationScreenState
           )
           .timeout(const Duration(seconds: 25));
 
-      if (kDebugMode) {
-        debugPrint('=== REGISTER API RESPONSE ===');
-        debugPrint('Status Code : ${response.statusCode}');
-        debugPrint('Body        : ${response.body}');
-        debugPrint('=============================');
-      }
-      _logger.i(
-        'Register response [${response.statusCode}] ← $uri\nBody: ${response.body}',
-      );
-
       if (!mounted) return;
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -262,587 +380,945 @@ class _MusicianRegistrationScreenState
         final bool status = json['status'] == true || json['status'] == 1;
 
         if (status) {
-          // Persist token (if provided by API) for dashboard calls
           try {
             final dynamic rawToken = json['token'] ?? (json['data']?['token']);
             final token = rawToken?.toString();
             if (token != null && token.isNotEmpty) {
               await SessionTokenStore.setToken(token);
-              _logger.i('Register token saved: $token');
             }
-          } catch (e, st) {
-            _logger.w(
-              'Failed to save register token',
-              error: e,
-              stackTrace: st,
-            );
-          }
+          } catch (_) {}
 
-          if (!mounted) return;
-          Navigator.of(context)
-              .pushReplacementNamed(AppRoutes.registrationSuccess);
+          Get.offAllNamed(AppRoutes.registrationSuccess);
         } else {
-          _showDialog(
-            'Registration Failed',
-            json['message']?.toString() ??
-                'Something went wrong. Please try again.',
-          );
+          final msg = json['message']?.toString() ?? 'Registration failed. Try again.';
+          _showError(msg);
         }
       } else {
-        final apiMessage = _extractApiMessage(response.body);
-        _showDialog(
-          'Error',
-          apiMessage ??
-              'Server returned status ${response.statusCode}. Please try again.',
-        );
+        _showError('Server error (${response.statusCode}). Please try again.');
       }
-    } catch (e, st) {
-      _logger.e('Register error', error: e, stackTrace: st);
-      if (!mounted) return;
-      _showDialog(
-        'Error',
-        '${_messageForNetworkError(e)}${kDebugMode ? '\n\n$e' : ''}',
-      );
+    } catch (e) {
+      _showError('Unable to connect to server. Please check your internet connection.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showDialog(String title, String message, {VoidCallback? onOk}) {
-    showDialog<void>(
+  // ── Modern Searchable Bottom Sheet Modal Selector ──
+  void _openSearchableBottomSheet({
+    required String title,
+    required List<String> items,
+    required String? selectedValue,
+    required ValueChanged<String> onSelected,
+  }) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              onOk?.call();
-            },
-            child: const Text('OK'),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = items.where((item) {
+              if (query.isEmpty) return true;
+              return item.toLowerCase().contains(query.toLowerCase());
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.72,
+              decoration: const BoxDecoration(
+                color: Color(0xFF12121A),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border(
+                  top: BorderSide(color: Colors.white12, width: 1),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // Top Notch Grab Handle
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+
+                  // Header with Close
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF2A6D).withOpacity(0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.map_rounded, color: Color(0xFFFF2A6D), size: 18),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 20),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 🔍 Search Bar inside Bottom Sheet
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                    child: Container(
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1B1B26),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: TextField(
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        onChanged: (val) => setModalState(() => query = val.trim()),
+                        decoration: InputDecoration(
+                          hintText: 'Search $title...',
+                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFFF2A6D), size: 18),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Items List
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No matching results found',
+                              style: TextStyle(color: Colors.white38, fontSize: 13),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => Divider(color: Colors.white.withOpacity(0.05), height: 1),
+                            itemBuilder: (context, index) {
+                              final item = filtered[index];
+                              final isSelected = item == selectedValue;
+
+                              return ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                tileColor: isSelected ? const Color(0xFFFF2A6D).withOpacity(0.12) : Colors.transparent,
+                                title: Text(
+                                  item,
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : Colors.white70,
+                                    fontSize: 14,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                  ),
+                                ),
+                                trailing: isSelected
+                                    ? const Icon(Icons.check_circle_rounded, color: Color(0xFFFF2A6D), size: 20)
+                                    : null,
+                                onTap: () {
+                                  onSelected(item);
+                                  Navigator.pop(ctx);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF07070B),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0F0F16),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          onPressed: () {
+            if (_currentStep > 0) {
+              _goToStep(_currentStep - 1);
+            } else {
+              Navigator.maybePop(context);
+            }
+          },
+        ),
+        title: const Text(
+          'Creator Registration',
+          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+        ),
+        centerTitle: true,
+      ),
+      body: Stack(
+        children: [
+          // 🌌 Ambient Glowing Background
+          Positioned(
+            top: -40,
+            right: -40,
+            child: Container(
+              width: 260,
+              height: 260,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFD70F64).withOpacity(0.16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFD70F64).withOpacity(0.3),
+                    blurRadius: 120,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Main Column
+          Column(
+            children: [
+              const SizedBox(height: 12),
+
+              // 🌟 Top 3-Step Indicator Bar
+              _buildStepProgressBar(),
+              const SizedBox(height: 16),
+
+              // 📄 PageView for 3 Step Screens
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _buildStep1Identity(),
+                    _buildStep2Location(),
+                    _buildStep3Security(),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ── Build ─────────────────────────────────────────────────
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kPink,
-      body: SafeArea(
-        child: Column(
+  /// 🌟 3-Step Visual Progress Indicator
+  Widget _buildStepProgressBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF13131D),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+        ),
+        child: Row(
           children: [
-            // ── Top Bar ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: () => Navigator.maybePop(context),
-                      child: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                  const Text(
-                    'Telso World',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Scrollable Form ──
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Icon + title
-                      Center(
-                        child: Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.25),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.broadcast_on_personal_rounded,
-                            color: Colors.white,
-                            size: 38,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      const Center(
-                        child: Text(
-                          'Reporter Registration',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Center(
-                        child: Text(
-                          'Join the Telso World community and start reporting',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
-                            fontSize: 13.5,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // ── School / Organisation ──
-                      _FieldLabel('Musician Name *'),
-                      _CtrlField(
-                        controller: _schoolNameCtrl,
-                        hint: 'e.g. ABC',
-                      ),
-
-                      // ── Mobile ──
-                      _FieldLabel('Mobile Number *'),
-                      _CtrlField(
-                        controller: _mobileCtrl,
-                        hint: '+91 00000 00000',
-                        keyboardType: TextInputType.phone,
-                      ),
-
-                      // ── WhatsApp ──
-                      _FieldLabel('WhatsApp Number *'),
-                      _CtrlField(
-                        controller: _whatsappCtrl,
-                        hint: 'Same or different from mobile',
-                        keyboardType: TextInputType.phone,
-                      ),
-
-                      // ── Email ──
-                      _FieldLabel('Email *'),
-                      _CtrlField(
-                        controller: _emailCtrl,
-                        hint: 'yourname@example.com',
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-
-                      // ── Village / Pincode ──
-                      _FieldLabel('Village / Mohalla *'),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _CtrlField(
-                              controller: _villageCtrl,
-                              hint: 'Locality',
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _CtrlField(
-                              controller: _pincodeCtrl,
-                              hint: 'Pincode',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      // ── Date of Birth ──
-                      _FieldLabel('Happy birthday 🎂 Date*'),
-                      GestureDetector(
-                        onTap: _pickDob,
-                        child: Container(
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: kFieldBg,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _dobDisplay,
-                                  style: TextStyle(
-                                    color: _dob == null
-                                        ? Colors.grey.shade400
-                                        : const Color(0xFF333333),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.calendar_today_outlined,
-                                color: Colors.grey.shade400,
-                                size: 18,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // ── State / District ──
-                      _FieldLabel('State *'),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _DropdownField(
-                              hint: 'Select State',
-                              value: _selectedState,
-                              items: _states,
-                              onChanged: (v) => setState(() {
-                                _selectedState = v;
-                                _selectedDistrict = null;
-                              }),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _DropdownField(
-                              hint: 'Select District',
-                              value: _selectedDistrict,
-                              items: _districts,
-                              onChanged: (v) =>
-                                  setState(() => _selectedDistrict = v),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      // ── Username ──
-                      _FieldLabel('Username *'),
-                      _CtrlField(
-                        controller: _usernameCtrl,
-                        hint: 'Choose a unique username',
-                      ),
-
-                      // ── Password ──
-                      _FieldLabel('Password *'),
-                      _PasswordCtrlField(
-                        controller: _passwordCtrl,
-                        obscure: _obscurePassword,
-                        onToggle: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                      ),
-
-                      // ── Referral Code ──
-                      _FieldLabel('Referral Code (Optional)'),
-                      _CtrlField(
-                        controller: _referralCtrl,
-                        hint: 'e.g. TELSONGZY',
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // ── Terms ──
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: Checkbox(
-                              value: _agreeTerms,
-                              onChanged: (v) =>
-                                  setState(() => _agreeTerms = v ?? false),
-                              activeColor: Colors.white,
-                              checkColor: kPink,
-                              side: const BorderSide(
-                                color: Colors.white,
-                                width: 1.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: RichText(
-                              text: TextSpan(
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.85),
-                                  fontSize: 13,
-                                  height: 1.5,
-                                ),
-                                children: const [
-                                  TextSpan(text: 'I agree to the '),
-                                  TextSpan(
-                                    text: 'Terms & Conditions',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      decoration: TextDecoration.underline,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: ' and privacy policy of Telso World.',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // ── Register Now Button ──
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: (_agreeTerms && !_isLoading)
-                              ? _register
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black,
-                            disabledBackgroundColor: Colors.black.withOpacity(
-                              0.4,
-                            ),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(32),
-                            ),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : const Text(
-                                  'Register Now',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      // ── Login link ──
-                      Center(
-                        child: RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.75),
-                              fontSize: 13.5,
-                            ),
-                            children: [
-                              const TextSpan(text: 'Already have an account? '),
-                              TextSpan(
-                                text: 'Login',
-                                recognizer: TapGestureRecognizer()
-                                  ..onTap = () {
-                                    Navigator.of(
-                                      context,
-                                    ).pushReplacementNamed(AppRoutes.login);
-                                  },
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            _buildStepIcon(stepIndex: 0, label: 'Identity', icon: Icons.person_rounded),
+            _buildStepConnector(isCompleted: _currentStep >= 1),
+            _buildStepIcon(stepIndex: 1, label: 'Contact', icon: Icons.location_on_rounded),
+            _buildStepConnector(isCompleted: _currentStep >= 2),
+            _buildStepIcon(stepIndex: 2, label: 'Security', icon: Icons.lock_rounded),
           ],
         ),
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────
-// Field Label
-// ─────────────────────────────────────────
-class _FieldLabel extends StatelessWidget {
-  final String text;
-  const _FieldLabel(this.text);
+  Widget _buildStepIcon({
+    required int stepIndex,
+    required String label,
+    required IconData icon,
+  }) {
+    final isDone = _currentStep > stepIndex;
+    final isCurrent = _currentStep == stepIndex;
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6, top: 14),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13.5,
-          fontWeight: FontWeight.w600,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 260),
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: isCurrent || isDone
+                ? const LinearGradient(
+                    colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
+                  )
+                : null,
+            color: isCurrent || isDone ? null : const Color(0xFF1F1F2C),
+            boxShadow: isCurrent
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFFF2A6D).withOpacity(0.5),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Center(
+            child: isDone
+                ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+                : Icon(
+                    icon,
+                    color: isCurrent ? Colors.white : Colors.white38,
+                    size: 16,
+                  ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: isCurrent ? Colors.white : Colors.white38,
+            fontSize: 10.5,
+            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepConnector({required bool isCompleted}) {
+    return Expanded(
+      child: Container(
+        height: 2.5,
+        margin: const EdgeInsets.only(bottom: 14, left: 6, right: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(2),
+          color: isCompleted ? const Color(0xFFFF2A6D) : Colors.white12,
         ),
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────
-// Controlled Text Field
-// ─────────────────────────────────────────
-class _CtrlField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final TextInputType? keyboardType;
-
-  const _CtrlField({
-    required this.controller,
-    required this.hint,
-    this.keyboardType,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 50,
-      decoration: BoxDecoration(
-        color: kFieldBg,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 14,
+  // ─────────────────────────────────────────
+  // STEP 1: Musician & Identity Info
+  // ─────────────────────────────────────────
+  Widget _buildStep1Identity() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStepHeader(
+            title: 'Step 1: Musician & Profile',
+            subtitle: 'Enter your artist name, username, and valid email',
+            badge: '1 / 3',
           ),
-        ),
+          const SizedBox(height: 18),
+
+          _buildFormCard([
+            _buildInputField(
+              label: 'Musician / Channel Name *',
+              hint: 'e.g. Sahil Music Records',
+              controller: _schoolNameCtrl,
+              icon: Icons.music_note_rounded,
+            ),
+            const SizedBox(height: 14),
+            _buildInputField(
+              label: 'Unique Username *',
+              hint: 'e.g. sahil_star (no spaces)',
+              controller: _usernameCtrl,
+              icon: Icons.alternate_email_rounded,
+            ),
+            const SizedBox(height: 14),
+            _buildInputField(
+              label: 'Email Address *',
+              hint: 'e.g. yourname@gmail.com',
+              controller: _emailCtrl,
+              icon: Icons.email_outlined,
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 14),
+            // Birthday Date Picker
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Date of Birth *',
+                  style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: _pickDob,
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF191924),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _dobDisplay,
+                          style: TextStyle(
+                            color: _dob == null ? Colors.white30 : Colors.white,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const Icon(Icons.cake_rounded, color: Color(0xFFFF2A6D), size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ]),
+          const SizedBox(height: 24),
+
+          // Continue Button
+          _buildActionButton(
+            label: 'Continue to Contact',
+            icon: Icons.arrow_forward_rounded,
+            onTap: _validateStep1AndNext,
+          ),
+          const SizedBox(height: 20),
+        ],
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────
-// Controlled Password Field
-// ─────────────────────────────────────────
-class _PasswordCtrlField extends StatelessWidget {
-  final TextEditingController controller;
-  final bool obscure;
-  final VoidCallback onToggle;
-
-  const _PasswordCtrlField({
-    required this.controller,
-    required this.obscure,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 50,
-      decoration: BoxDecoration(
-        color: kFieldBg,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: TextFormField(
-        controller: controller,
-        obscureText: obscure,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
-        decoration: InputDecoration(
-          hintText: 'Minimum 8 characters',
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 14,
+  // ─────────────────────────────────────────
+  // STEP 2: Contact & Location Info
+  // ─────────────────────────────────────────
+  Widget _buildStep2Location() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStepHeader(
+            title: 'Step 2: Contact & Location',
+            subtitle: 'Provide verified phone and choose state & district',
+            badge: '2 / 3',
           ),
-          suffixIcon: GestureDetector(
-            onTap: onToggle,
-            child: Icon(
-              obscure
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              color: Colors.grey.shade400,
-              size: 20,
+          const SizedBox(height: 18),
+
+          _buildFormCard([
+            _buildInputField(
+              label: 'Mobile Number *',
+              hint: '10-digit mobile number (e.g. 9876543210)',
+              controller: _mobileCtrl,
+              icon: Icons.phone_android_rounded,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 14),
+            _buildInputField(
+              label: 'WhatsApp Number (Optional)',
+              hint: 'Same or 10-digit alternate number',
+              controller: _whatsappCtrl,
+              icon: Icons.chat_rounded,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 14),
+
+            // 🌟 Bottom Sheet State & District Selectors
+            Row(
+              children: [
+                Expanded(
+                  child: _buildBottomSheetTrigger(
+                    label: 'State *',
+                    hint: 'Select State',
+                    value: _selectedState,
+                    onTap: () {
+                      _openSearchableBottomSheet(
+                        title: 'Select State',
+                        items: _states,
+                        selectedValue: _selectedState,
+                        onSelected: (val) {
+                          setState(() {
+                            _selectedState = val;
+                            _selectedDistrict = null; // Reset district when state changes
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildBottomSheetTrigger(
+                    label: 'District *',
+                    hint: _selectedState == null ? 'Choose State First' : 'Select District',
+                    value: _selectedDistrict,
+                    onTap: () {
+                      if (_selectedState == null) {
+                        _showError('Please select a State first.');
+                        return;
+                      }
+                      _openSearchableBottomSheet(
+                        title: 'Select District ($_selectedState)',
+                        items: _districts,
+                        selectedValue: _selectedDistrict,
+                        onSelected: (val) {
+                          setState(() => _selectedDistrict = val);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            Row(
+              children: [
+                Expanded(
+                  child: _buildInputField(
+                    label: 'Village / City',
+                    hint: 'Locality',
+                    controller: _villageCtrl,
+                    icon: Icons.home_rounded,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildInputField(
+                    label: 'Pincode',
+                    hint: '6-digit PIN',
+                    controller: _pincodeCtrl,
+                    icon: Icons.pin_drop_rounded,
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+          ]),
+          const SizedBox(height: 24),
+
+          // Continue Button
+          _buildActionButton(
+            label: 'Continue to Security',
+            icon: Icons.arrow_forward_rounded,
+            onTap: _validateStep2AndNext,
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────
+  // STEP 3: Security & Referral
+  // ─────────────────────────────────────────
+  Widget _buildStep3Security() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStepHeader(
+            title: 'Step 3: Security & Referral',
+            subtitle: 'Set your password and finish account registration',
+            badge: '3 / 3',
+          ),
+          const SizedBox(height: 18),
+
+          _buildFormCard([
+            // Password Field
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Password *',
+                  style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF191924),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: TextField(
+                    controller: _passwordCtrl,
+                    obscureText: _obscurePassword,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Create a secure password (min 4 chars)',
+                      hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+                      prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFFFF2A6D), size: 18),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                          color: Colors.white38,
+                          size: 18,
+                        ),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _buildInputField(
+              label: 'Referral Code (Optional)',
+              hint: 'e.g. TELSO882',
+              controller: _referralCtrl,
+              icon: Icons.card_giftcard_rounded,
+            ),
+          ]),
+          const SizedBox(height: 18),
+
+          // Summary Mini Review Box
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF14141E),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded, color: Color(0xFF00E5FF), size: 16),
+                    SizedBox(width: 6),
+                    Text('Account Summary', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '• Creator: ${_schoolNameCtrl.text.isNotEmpty ? _schoolNameCtrl.text : "Musician"} (@${_usernameCtrl.text})\n• Mobile: ${_mobileCtrl.text}\n• Email: ${_emailCtrl.text}\n• Region: ${_selectedDistrict ?? ""}, ${_selectedState ?? ""}',
+                  style: TextStyle(color: Colors.white.withOpacity(0.65), fontSize: 12, height: 1.45),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Terms Checkbox
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: _agreeTerms,
+                  activeColor: const Color(0xFFFF2A6D),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                  side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                  onChanged: (v) => setState(() => _agreeTerms = v ?? false),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    text: 'I agree to the ',
+                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
+                    children: const [
+                      TextSpan(
+                        text: 'Terms & Conditions',
+                        style: TextStyle(color: Color(0xFFFF6584), fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(text: ' and Privacy Policy of Telso World.'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Final Submit Button
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: _isLoading ? null : _register,
+              child: Ink(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFD70F64).withOpacity(0.5),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Complete Registration',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                          ],
+                        ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  // ── Helper Widgets ──
+
+  Widget _buildStepHeader({
+    required String title,
+    required String subtitle,
+    required String badge,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF2A6D).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFFF2A6D).withOpacity(0.3)),
+          ),
+          child: Text(
+            badge,
+            style: const TextStyle(color: Color(0xFFFF6584), fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormCard(List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF13131D),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildInputField({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF191924),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(0.06)),
+          ),
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+              prefixIcon: Icon(icon, color: const Color(0xFFFF2A6D), size: 18),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
-}
 
-// ─────────────────────────────────────────
-// Dropdown Field
-// ─────────────────────────────────────────
-class _DropdownField extends StatelessWidget {
-  final String hint;
-  final String? value;
-  final List<String> items;
-  final ValueChanged<String?> onChanged;
-
-  const _DropdownField({
-    required this.hint,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 50,
-      decoration: BoxDecoration(
-        color: kFieldBg,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          hint: Text(
-            hint,
-            style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+  // 🌟 Bottom Sheet Trigger Box (Replaces inline dropdown)
+  Widget _buildBottomSheetTrigger({
+    required String label,
+    required String hint,
+    required String? value,
+    required VoidCallback onTap,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF191924),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: value != null ? const Color(0xFFFF2A6D).withOpacity(0.4) : Colors.white.withOpacity(0.06),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value ?? hint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: value != null ? Colors.white : Colors.white30,
+                      fontSize: 13,
+                      fontWeight: value != null ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFFF2A6D), size: 18),
+              ],
+            ),
           ),
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: Color(0xFF666666),
-            size: 22,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        onPressed: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD70F64).withOpacity(0.4),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          isExpanded: true,
-          style: const TextStyle(color: Color(0xFF333333), fontSize: 13),
-          items: items
-              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-              .toList(),
-          onChanged: onChanged,
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(icon, color: Colors.white, size: 18),
+              ],
+            ),
+          ),
         ),
       ),
     );

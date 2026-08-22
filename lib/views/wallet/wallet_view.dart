@@ -143,20 +143,25 @@ class _WalletScreenState extends State<WalletScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Recent Transactions',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                          const Flexible(
+                            child: Text(
+                              'Recent Transactions',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               _buildFilterChip('ALL'),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
                               _buildFilterChip('CREDIT'),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
                               _buildFilterChip('DEBIT'),
                             ],
                           ),

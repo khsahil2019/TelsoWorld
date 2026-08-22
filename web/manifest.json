@@ -1,11 +1,11 @@
 {
-    "name": "telsoworld",
-    "short_name": "telsoworld",
+    "name": "Telso World",
+    "short_name": "Telso World",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#09090E",
+    "theme_color": "#D70F64",
+    "description": "Telso World - Short Video & Music Community",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
