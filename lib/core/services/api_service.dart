@@ -5,10 +5,22 @@ import 'package:logger/logger.dart';
 import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/services/storage_service.dart';
 
+/// ---------------------------------------------------------------------------
+/// 🌐 ApiService (Central HTTP Network Client)
+/// ---------------------------------------------------------------------------
+/// Yeh service backend REST APIs ke saath communication handle karti hai.
+///
+/// New Developer ke liye zaroori baatein:
+/// 1. `_defaultHeaders`: Agar user logged in hai, toh automatically `Authorization: Bearer <token>`
+///    aur `Accept: application/json` attach karta hai. Manual header lagane ki zaroorat nahi padti.
+/// 2. `get()` aur `post()` methods me automatic URL construction (`baseUrl + endpoint`)
+///    aur console logging configured hai.
+/// ---------------------------------------------------------------------------
 class ApiService extends GetxService {
   final Logger _logger = Logger();
   StorageService get _storage => Get.find<StorageService>();
 
+  /// 📋 Default Headers (Bearer Token + JSON accept)
   Map<String, String> get _defaultHeaders {
     final token = _storage.getToken();
     final headers = <String, String>{
@@ -20,6 +32,7 @@ class ApiService extends GetxService {
     return headers;
   }
 
+  /// 📥 HTTP GET Request (URL query parameters ke saath)
   Future<http.Response> get(String endpoint, {Map<String, String>? queryParams}) async {
     final uri = Uri.parse('${ApiEndpoints.baseUrl}$endpoint').replace(queryParameters: queryParams);
     _logger.i('GET Request -> $uri');
@@ -33,10 +46,11 @@ class ApiService extends GetxService {
     }
   }
 
+  /// 📤 HTTP POST Request (JSON payload ya Form-urlencoded data ke saath)
   Future<http.Response> post(String endpoint, {Map<String, dynamic>? body, bool isFormUrlEncoded = false}) async {
     final uri = Uri.parse('${ApiEndpoints.baseUrl}$endpoint');
     final headers = Map<String, String>.from(_defaultHeaders);
-    
+
     dynamic formattedBody;
     if (isFormUrlEncoded) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';

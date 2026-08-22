@@ -7,8 +7,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
-import 'package:telsoworld/app_routes.dart';
-import 'package:telsoworld/session_token_store.dart';
+import 'package:telsoworld/core/routes/app_routes.dart';
+import 'package:telsoworld/core/services/session_token_store.dart';
 
 const kPink = Color(0xFFD70F64);
 const kFieldBg = Color(0xFFFAF0F4);

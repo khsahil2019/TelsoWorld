@@ -22,14 +22,27 @@ class FeedController extends GetxController {
     try {
       final response = await _apiService.get(ApiEndpoints.dashboard);
       if (response.statusCode == 200) {
-        final Map<String, dynamic> json = jsonDecode(response.body);
-        if (json['videos'] != null && json['videos'] is List) {
-          final List list = json['videos'];
-          videos.assignAll(list.map((v) => VideoModel.fromJson(v)).toList());
+        final decoded = jsonDecode(response.body);
+        List list = [];
+        if (decoded is List) {
+          list = decoded;
+        } else if (decoded is Map<String, dynamic>) {
+          if (decoded['videos'] is List) {
+            list = decoded['videos'];
+          } else if (decoded['data'] is List) {
+            list = decoded['data'];
+          }
         }
+        videos.assignAll(
+          list
+              .whereType<Map<String, dynamic>>()
+              .map((v) => VideoModel.fromJson(v))
+              .toList(),
+        );
       }
     } catch (e) {
-      Get.snackbar('Error', 'Failed to load video feed: $e', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Error', 'Failed to load dashboard feed: $e',
+          snackPosition: SnackPosition.BOTTOM);
     } finally {
       isLoading.value = false;
     }
@@ -46,17 +59,25 @@ class FeedController extends GetxController {
     videos[index] = current.copyWith(isLiked: updatedIsLiked, likes: updatedLikes);
 
     try {
+      final isAd = current.videoType == 'ads';
+      final endpoint = isAd ? ApiEndpoints.adsVideoLike : ApiEndpoints.normalVideoLike;
       await _apiService.post(
-        ApiEndpoints.normalVideoLike,
+        endpoint,
         body: {'video_id': videoId.toString()},
       );
     } catch (_) {}
   }
 
   Future<void> recordView(int videoId) async {
+    final index = videos.indexWhere((v) => v.id == videoId);
+    if (index == -1) return;
+
+    final current = videos[index];
     try {
+      final isAd = current.videoType == 'ads';
+      final endpoint = isAd ? ApiEndpoints.adsVideoView : ApiEndpoints.normalVideoView;
       await _apiService.post(
-        ApiEndpoints.normalVideoView,
+        endpoint,
         body: {'video_id': videoId.toString()},
       );
     } catch (_) {}

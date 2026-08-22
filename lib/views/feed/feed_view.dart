@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+import 'package:telsoworld/controllers/main_nav_controller.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:telsoworld/core/routes/app_route_observer.dart';
@@ -10,6 +12,8 @@ import 'package:telsoworld/views/ads/ads_view.dart';
 import 'package:telsoworld/views/upload/uploaded_video_view.dart';
 import 'package:telsoworld/views/web_link/updated_web_link_view.dart';
 import 'package:telsoworld/core/services/storage_service.dart';
+import 'package:telsoworld/core/services/session_token_store.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
 const String _kApiHost = 'telsoworld.com';
@@ -25,7 +29,11 @@ String _normalizeVideoUrl(String rawPath) {
     return uri.toString();
   }
 
-  final safePath = encoded.startsWith('/') ? encoded : '/$encoded';
+  String safePath = encoded.startsWith('/') ? encoded : '/$encoded';
+  if (!safePath.startsWith('/storage/') &&
+      (safePath.startsWith('/videos/') || safePath.startsWith('/ad-videos/'))) {
+    safePath = '/storage$safePath';
+  }
   return Uri.https(_kApiHost, safePath).toString();
 }
 
@@ -97,7 +105,9 @@ class VideoItem {
     id: json['id'] as int? ?? 0,
     subject: json['subject']?.toString() ?? '',
     name: json['name']?.toString() ?? 'Unknown',
-    videoPath: _normalizeVideoUrl(json['video_path']?.toString() ?? ''),
+    videoPath: _normalizeVideoUrl(
+      json['video_url']?.toString() ?? json['video_path']?.toString() ?? '',
+    ),
     likesCount: _toInt(json['likes_count']),
     sharesCount: _toInt(json['shares_count']),
     videoType: json['video_type']?.toString() ?? 'normal',
@@ -410,27 +420,7 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware {
             child: _TopBar(
               referralCode: _referralCode,
               onAdsTap: _openAdsVideos,
-              onMenuTap: _toggleMenu,
               hasSettingVideo: (_setting?.fileUploaded ?? '').isNotEmpty,
-            ),
-          ),
-
-          // ── Dark backdrop when menu is open ──
-          if (_menuOpen)
-            GestureDetector(
-              onTap: _toggleMenu,
-              child: Container(color: Colors.black.withValues(alpha: 0.50)),
-            ),
-
-          // ── Slide-in side menu from the right ──
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            top: 90,
-            right: _menuOpen ? 12 : -260,
-            child: _SideMenu(
-              onClose: _toggleMenu,
-              onNavigate: _navigateTo,
             ),
           ),
         ],
@@ -918,30 +908,31 @@ class _VideoPageState extends State<_VideoPage>
           // ── Right action buttons ──
           Positioned(
             right: 10,
-            bottom: 110,
+            bottom: 28,
             child: _RightActions(
               isLiked: _isLiked,
               likesCount: _likesCount,
               sharesCount: widget.video.sharesCount,
+              videoTitle: widget.video.subject,
               onLikeTap: () => _toggleLike(),
               onCommentTap: _openCommentsSheet,
             ),
           ),
 
-          // ── Bottom info ──
+          // ── Bottom info (caption, creator & audio) ──
           Positioned(
-            left: 16,
-            right: 90,
-            bottom: 100,
+            left: 14,
+            right: 88,
+            bottom: 20,
             child: _BottomInfo(video: widget.video),
           ),
 
-          // ── Scrubbable progress bar ──
+          // ── Scrubbable progress bar at the very bottom ──
           if (_initialized)
             Positioned(
               left: 0,
               right: 0,
-              bottom: 82,
+              bottom: 0,
               child: VideoProgressIndicator(
                 _controller!,
                 allowScrubbing: true,
@@ -966,28 +957,114 @@ class _VideoErrorPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF111111),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.videocam_off_rounded,
-              color: Colors.white24,
-              size: 56,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              subject,
-              style: const TextStyle(color: Colors.white38, fontSize: 13),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Video unavailable',
-              style: TextStyle(color: Colors.white24, fontSize: 12),
-            ),
-          ],
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF241020), Color(0xFF0F0F14), Color(0xFF141926)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
         ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Background ambient gradient circles
+          Positioned(
+            top: 140,
+            child: Container(
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFD70F64).withOpacity(0.12),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFD70F64).withOpacity(0.25),
+                    blurRadius: 90,
+                    spreadRadius: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Central Music Vinyl & Visualizer Art
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Glowing Music Disc Art
+                Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFD70F64), Color(0xFF8A2387), Color(0xFFFF8008)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFD70F64).withOpacity(0.45),
+                        blurRadius: 28,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF161622),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.music_note_rounded,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Reel Title / Subject
+                Text(
+                  subject.isNotEmpty ? subject : 'Telso Creator Performance',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+
+                // Track tag badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00E5FF).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.graphic_eq_rounded, color: Color(0xFF00E5FF), size: 14),
+                      SizedBox(width: 6),
+                      Text(
+                        'Original Music Track • Live',
+                        style: TextStyle(color: Color(0xFF80D8FF), fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -996,93 +1073,179 @@ class _VideoErrorPlaceholder extends StatelessWidget {
 // ─────────────────────────────────────────
 // Top Bar
 // ─────────────────────────────────────────
-class _TopBar extends StatelessWidget {
+class _TopBar extends StatefulWidget {
   final String? referralCode;
   final VoidCallback onAdsTap;
-  final VoidCallback onMenuTap;
   final bool hasSettingVideo;
 
   const _TopBar({
     this.referralCode,
     required this.onAdsTap,
-    required this.onMenuTap,
     required this.hasSettingVideo,
   });
 
   @override
+  State<_TopBar> createState() => _TopBarState();
+}
+
+class _TopBarState extends State<_TopBar> {
+  int _selectedTab = 1; // 0: Following, 1: For You
+
+  @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(
         children: [
-          // Referral code badge
-          if (referralCode != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFD70F64).withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                referralCode!,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
+          // Live Pulsing Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.45),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF00E676),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                const Text(
+                  'LIVE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Spacer(),
+
+          // Feed Segmented Tabs (Following | For You)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _selectedTab = 0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Following',
+                      style: TextStyle(
+                        color: _selectedTab == 0 ? Colors.white : Colors.white54,
+                        fontSize: _selectedTab == 0 ? 15 : 14,
+                        fontWeight: _selectedTab == 0 ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      width: 24,
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: _selectedTab == 0 ? const Color(0xFFD70F64) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            )
-          else
-            const SizedBox(width: 8),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: () => setState(() => _selectedTab = 1),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'For You',
+                      style: TextStyle(
+                        color: _selectedTab == 1 ? Colors.white : Colors.white54,
+                        fontSize: _selectedTab == 1 ? 16 : 14,
+                        fontWeight: _selectedTab == 1 ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      width: 24,
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: _selectedTab == 1 ? const Color(0xFFD70F64) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
 
-          const Expanded(child: SizedBox()),
+          const Spacer(),
 
           // Ads Video button
           GestureDetector(
-            onTap: onAdsTap,
+            onTap: widget.onAdsTap,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFFD70F64).withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Text(
-                'Ads Video',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
                 ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFD70F64).withOpacity(0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.campaign_rounded, color: Colors.white, size: 14),
+                  SizedBox(width: 4),
+                  Text(
+                    'Ads',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          if (hasSettingVideo) ...[
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.verified_rounded,
-              color: Color(0xFFD70F64),
-              size: 18,
-            ),
-          ],
-
           const SizedBox(width: 8),
 
-          // Menu toggle button — beside Ads Video
+          // Search Button (Switches to Discovery tab)
           GestureDetector(
-            onTap: onMenuTap,
+            onTap: () {
+              try {
+                Get.find<MainNavController>().changeTab(1);
+              } catch (_) {}
+            },
             child: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(10),
+                color: Colors.black.withOpacity(0.45),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white12),
               ),
-              child: const Icon(Icons.menu_rounded, color: Colors.white, size: 22),
+              child: const Icon(Icons.search_rounded, color: Colors.white, size: 18),
             ),
           ),
-
-          const SizedBox(width: 8),
-          const Icon(Icons.search, color: Colors.white, size: 26),
         ],
       ),
     );
@@ -1096,6 +1259,7 @@ class _RightActions extends StatefulWidget {
   final bool isLiked;
   final int likesCount;
   final int sharesCount;
+  final String videoTitle;
   final VoidCallback onLikeTap;
   final VoidCallback onCommentTap;
 
@@ -1103,6 +1267,7 @@ class _RightActions extends StatefulWidget {
     required this.isLiked,
     required this.likesCount,
     required this.sharesCount,
+    this.videoTitle = 'Telso Reel',
     required this.onLikeTap,
     required this.onCommentTap,
   });
@@ -1115,6 +1280,7 @@ class _RightActionsState extends State<_RightActions>
     with SingleTickerProviderStateMixin {
   late AnimationController _heartCtrl;
   late Animation<double> _heartScale;
+  bool _isFollowing = false;
 
   @override
   void initState() {
@@ -1141,14 +1307,34 @@ class _RightActionsState extends State<_RightActions>
     return '$count';
   }
 
+  void _shareVideo() {
+    Share.share(
+      'Watch this trending reel on Telso World! 🔥 https://telsoworld.com',
+      subject: widget.videoTitle,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Avatar
-        _Avatar(),
-        const SizedBox(height: 22),
+        // Avatar with Follow + Badge
+        _Avatar(
+          isFollowing: _isFollowing,
+          onFollowTap: () {
+            setState(() => _isFollowing = !_isFollowing);
+            Get.snackbar(
+              _isFollowing ? 'Following ✨' : 'Unfollowed',
+              _isFollowing ? 'You are now following this creator' : 'Unfollowed creator',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: const Color(0xFF1E1E24),
+              colorText: Colors.white,
+              duration: const Duration(seconds: 1),
+            );
+          },
+        ),
+        const SizedBox(height: 20),
 
         // Like
         GestureDetector(
@@ -1164,12 +1350,12 @@ class _RightActionsState extends State<_RightActions>
                   : Icons.favorite_border_rounded,
               label: _fmt(widget.likesCount),
               iconColor: widget.isLiked
-                  ? const Color(0xFFD70F64)
+                  ? const Color(0xFFFF2A6D)
                   : Colors.white,
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
         // Comment
         GestureDetector(
@@ -1179,17 +1365,20 @@ class _RightActionsState extends State<_RightActions>
             label: 'Comment',
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
         // Share
-        _ActionButton(
-          icon: Icons.reply_rounded,
-          label: _fmt(widget.sharesCount),
-          flipHorizontal: true,
+        GestureDetector(
+          onTap: _shareVideo,
+          child: _ActionButton(
+            icon: Icons.reply_rounded,
+            label: _fmt(widget.sharesCount),
+            flipHorizontal: true,
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
-        // Spinning disc
+        // Spinning vinyl disc
         _SpinningDisc(),
       ],
     );
@@ -1197,6 +1386,14 @@ class _RightActionsState extends State<_RightActions>
 }
 
 class _Avatar extends StatelessWidget {
+  final bool isFollowing;
+  final VoidCallback onFollowTap;
+
+  const _Avatar({
+    this.isFollowing = false,
+    required this.onFollowTap,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -1209,22 +1406,33 @@ class _Avatar extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 2),
-            color: const Color(0xFF4A7A6A),
+            gradient: const LinearGradient(
+              colors: [Color(0xFFD70F64), Color(0xFFFF8008)],
+            ),
           ),
           child: const ClipOval(
-            child: Icon(Icons.person, color: Colors.white70, size: 30),
+            child: Icon(Icons.person, color: Colors.white, size: 28),
           ),
         ),
         Positioned(
-          bottom: -10,
-          child: Container(
-            width: 22,
-            height: 22,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xFFD70F64),
+          bottom: -8,
+          child: GestureDetector(
+            onTap: onFollowTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isFollowing ? const Color(0xFF00E676) : const Color(0xFFD70F64),
+                border: Border.all(color: Colors.black, width: 1.5),
+              ),
+              child: Icon(
+                isFollowing ? Icons.check : Icons.add,
+                color: Colors.white,
+                size: 13,
+              ),
             ),
-            child: const Icon(Icons.add, color: Colors.white, size: 14),
           ),
         ),
       ],
@@ -2218,7 +2426,7 @@ class _SideMenu extends StatelessWidget {
             icon: Icons.dashboard_rounded,
             gradientColors: const [Color(0xFF6C3FC5), Color(0xFF9B59B6)],
             trailingIcon: Icons.bar_chart_rounded,
-            onTap: () => onNavigate(const DashboardScreen()),
+            onTap: () => onNavigate(const FeedScreen()),
           ),
           const SizedBox(height: 12),
           _MenuItem(
@@ -2326,48 +2534,95 @@ class _BottomInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final creatorName = video.name.isNotEmpty ? video.name : 'telso_creator';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          '@${video.name}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            shadows: [Shadow(blurRadius: 6, color: Colors.black)],
-          ),
+        // Creator Handle + Verified Badge
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '@$creatorName',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                shadows: [Shadow(blurRadius: 8, color: Colors.black87)],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFD70F64),
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 10),
+            ),
+          ],
         ),
         const SizedBox(height: 6),
+
+        // Video Caption / Subject
         Text(
-          video.subject,
+          video.subject.isNotEmpty ? video.subject : 'Watch trending reels on Telso World! 🌟',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.92),
+            color: Colors.white.withOpacity(0.95),
             fontSize: 14,
-            height: 1.4,
-            shadows: const [Shadow(blurRadius: 6, color: Colors.black)],
+            height: 1.35,
+            shadows: const [Shadow(blurRadius: 8, color: Colors.black87)],
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 4),
+
+        // Hashtags Row
         Row(
-          children: [
-            const Icon(Icons.music_note, color: Colors.white70, size: 14),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                'Telso World — ${video.subject}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.75),
-                  fontSize: 13,
-                ),
+          children: const [
+            Text(
+              '#Bhojpuri #Viral #Trending #Reels',
+              style: TextStyle(
+                color: Color(0xFFFF6584),
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                shadows: [Shadow(blurRadius: 6, color: Colors.black)],
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+
+        // Audio Marquee Bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.4),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.music_note_rounded, color: Color(0xFF00E5FF), size: 14),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Original Audio • @$creatorName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

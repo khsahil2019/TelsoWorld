@@ -5,8 +5,11 @@ import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_pages.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 
+import 'package:telsoworld/core/services/storage_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Get.putAsync(() => StorageService().init());
   runApp(const TelsoWorldRootApp());
 }
 

@@ -8,8 +8,10 @@ import 'package:ffmpeg_kit_flutter_new_min_gpl/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min_gpl/return_code.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
-import 'package:telsoworld/session_token_store.dart';
+import 'package:telsoworld/controllers/main_nav_controller.dart';
+import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:video_editor/video_editor.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_trimmer/video_trimmer.dart';
@@ -535,7 +537,15 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
                   IconButton(
                     onPressed: _isUploading
                         ? null
-                        : () => Navigator.of(context).pop(),
+                        : () {
+                            if (Navigator.of(context).canPop()) {
+                              Navigator.of(context).pop();
+                            } else {
+                              try {
+                                Get.find<MainNavController>().changeTab(0);
+                              } catch (_) {}
+                            }
+                          },
                     icon: const Icon(Icons.close_rounded, color: Colors.white),
                   ),
                   const Expanded(

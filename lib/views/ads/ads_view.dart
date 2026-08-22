@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:telsoworld/core/services/storage_service.dart';
+import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:video_player/video_player.dart';
 
 const String _kApiHost = 'telsoworld.com';
@@ -20,7 +21,11 @@ String _normalizeVideoUrl(String rawPath) {
     return uri.toString();
   }
 
-  final safePath = encoded.startsWith('/') ? encoded : '/$encoded';
+  String safePath = encoded.startsWith('/') ? encoded : '/$encoded';
+  if (!safePath.startsWith('/storage/') &&
+      (safePath.startsWith('/videos/') || safePath.startsWith('/ad-videos/'))) {
+    safePath = '/storage$safePath';
+  }
   return Uri.https(_kApiHost, safePath).toString();
 }
 
