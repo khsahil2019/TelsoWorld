@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
-import 'package:telsoworld/core/services/storage_service.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:video_player/video_player.dart';
 

@@ -8,7 +8,6 @@ import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:telsoworld/views/ads/ads_view.dart';
-import 'package:telsoworld/views/auth/login_view.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
 import 'package:telsoworld/views/upload/uploaded_video_view.dart';
 import 'package:telsoworld/views/wallet/wallet_view.dart';

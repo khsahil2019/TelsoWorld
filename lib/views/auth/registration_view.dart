@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -218,8 +216,7 @@ class _MusicianRegistrationScreenState
             onPrimary: Colors.white,
             surface: Color(0xFF1E1E28),
             onSurface: Colors.white,
-          ),
-          dialogBackgroundColor: const Color(0xFF181822),
+          ), dialogTheme: DialogThemeData(backgroundColor: const Color(0xFF181822)),
         ),
         child: child!,
       ),
