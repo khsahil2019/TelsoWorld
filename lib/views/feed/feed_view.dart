@@ -9,8 +9,6 @@ import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:telsoworld/core/routes/app_route_observer.dart';
 import 'package:telsoworld/views/ads/ads_view.dart';
-import 'package:telsoworld/views/upload/uploaded_video_view.dart';
-import 'package:telsoworld/views/web_link/updated_web_link_view.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
@@ -210,7 +208,6 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware {
 
   bool _routeCovered = false;
   bool _routeObserverSubscribed = false;
-  bool _menuOpen = false;
 
   bool get _playbackActive => widget.visible && !_routeCovered;
 
@@ -267,13 +264,6 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware {
     Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const AdsVideoScreen()));
-  }
-
-  void _toggleMenu() => setState(() => _menuOpen = !_menuOpen);
-
-  void _navigateTo(Widget screen) {
-    setState(() => _menuOpen = false);
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   // ── API call ──────────────────────────────────────────────
@@ -2397,133 +2387,6 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
 
 // ─────────────────────────────────────────
 // Side Slide Menu
-// ─────────────────────────────────────────
-
-class _SideMenu extends StatelessWidget {
-  final VoidCallback onClose;
-  final void Function(Widget screen) onNavigate;
-
-  const _SideMenu({required this.onClose, required this.onNavigate});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 240,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _MenuItem(
-            label: 'Home',
-            icon: Icons.home_rounded,
-            gradientColors: const [Color(0xFF11C87B), Color(0xFF00E5A0)],
-            trailingIcon: Icons.tv_rounded,
-            onTap: onClose, // already on home, just close the menu
-          ),
-          const SizedBox(height: 12),
-          _MenuItem(
-            label: 'Dashboard',
-            icon: Icons.dashboard_rounded,
-            gradientColors: const [Color(0xFF6C3FC5), Color(0xFF9B59B6)],
-            trailingIcon: Icons.bar_chart_rounded,
-            onTap: () => onNavigate(const FeedScreen()),
-          ),
-          const SizedBox(height: 12),
-          _MenuItem(
-            label: 'Upload Video',
-            icon: Icons.upload_rounded,
-            gradientColors: const [Color(0xFFD70F64), Color(0xFFFF6B9D)],
-            trailingIcon: Icons.video_library_rounded,
-            onTap: () => onNavigate(const UploadedVideoScreen()),
-          ),
-          const SizedBox(height: 12),
-          _MenuItem(
-            label: 'Update Web Link',
-            icon: Icons.link_rounded,
-            gradientColors: const [Color(0xFFFF8C00), Color(0xFFFFBF47)],
-            trailingIcon: Icons.open_in_new_rounded,
-            onTap: () => onNavigate(const UpdatedWebLinkScreen()),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MenuItem extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final List<Color> gradientColors;
-  final IconData trailingIcon;
-  final VoidCallback onTap;
-
-  const _MenuItem({
-    required this.label,
-    required this.icon,
-    required this.gradientColors,
-    required this.trailingIcon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: gradientColors,
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: gradientColors.first.withValues(alpha: 0.45),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Leading icon
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.20),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            // Label
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            // Trailing badge icon
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.20),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(trailingIcon, color: Colors.white, size: 16),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────
 // Bottom Info  (subject + creator name)
 // ─────────────────────────────────────────

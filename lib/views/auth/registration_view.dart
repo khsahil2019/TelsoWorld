@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:logger/logger.dart';
 import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
@@ -27,7 +26,6 @@ class MusicianRegistrationScreen extends StatefulWidget {
 class _MusicianRegistrationScreenState
     extends State<MusicianRegistrationScreen> {
   final PageController _pageController = PageController();
-  final Logger _logger = Logger();
   int _currentStep = 0;
 
   bool _agreeTerms = false;

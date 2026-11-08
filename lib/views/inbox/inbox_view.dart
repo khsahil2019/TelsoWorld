@@ -18,7 +18,6 @@ class _InboxScreenState extends State<InboxScreen>
   String _activityFilter = 'All';
 
   String _myNote = '';
-  String _myNoteTime = '';
 
   final List<Map<String, dynamic>> _onlineUsers = [
     {
@@ -725,7 +724,6 @@ class _InboxScreenState extends State<InboxScreen>
                         onPressed: () {
                           setState(() {
                             _myNote = '';
-                            _myNoteTime = '';
                           });
                           Navigator.of(ctx).pop();
                           Get.snackbar('Note Deleted', 'Your note has been cleared.',
@@ -747,7 +745,6 @@ class _InboxScreenState extends State<InboxScreen>
                         if (text.isEmpty) return;
                         setState(() {
                           _myNote = text;
-                          _myNoteTime = 'Just now';
                         });
                         Navigator.of(ctx).pop();
                         Get.snackbar(

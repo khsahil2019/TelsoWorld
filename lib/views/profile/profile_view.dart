@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:share_plus/share_plus.dart';
 import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
@@ -22,12 +20,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoggingOut = false;
-  bool _isLoadingReferral = false;
 
   final String _userName = 'Telso Creator';
   final String _userHandle = '@reporter';
-  String _referralCode = '—';
-  String _referralLink = '';
   String _walletBalance = '₹0.00';
 
   final List<Map<String, dynamic>> _myVideos = [
@@ -98,22 +93,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final token = await SessionTokenStore.getToken();
       if (token.isEmpty) return;
 
-      // Load Referral Data
-      final refResponse = await http.get(
-        Uri.parse('https://telsoworld.com/api/reporter/referral'),
-        headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 15));
-
-      if (refResponse.statusCode == 200) {
-        final json = jsonDecode(refResponse.body);
-        if (mounted && json is Map) {
-          setState(() {
-            _referralCode = json['referral_code']?.toString() ?? 'TELSO2026';
-            _referralLink = json['referral_link']?.toString() ?? '';
-          });
-        }
-      }
-
       // Load Wallet Balance Preview
       final walletResponse = await http.get(
         Uri.parse('https://telsoworld.com/api/reporter/wallet'),
@@ -130,53 +109,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
     } catch (_) {}
-  }
-
-  Future<void> _shareReferral() async {
-    if (_referralLink.isNotEmpty) {
-      await Share.share(_referralLink, subject: 'Join Telso World with my referral code $_referralCode');
-      return;
-    }
-
-    setState(() => _isLoadingReferral = true);
-    try {
-      final token = await SessionTokenStore.getToken();
-      final response = await http.get(
-        Uri.parse('https://telsoworld.com/api/reporter/referral'),
-        headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 20));
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        final link = json['referral_link']?.toString() ?? '';
-        final code = json['referral_code']?.toString() ?? _referralCode;
-        if (link.isNotEmpty) {
-          _referralLink = link;
-          _referralCode = code;
-          await Share.share(link, subject: 'Join Telso World with my code $code');
-        } else {
-          _copyCodeToClipboard(_referralCode);
-        }
-      } else {
-        _copyCodeToClipboard(_referralCode);
-      }
-    } catch (_) {
-      _copyCodeToClipboard(_referralCode);
-    } finally {
-      if (mounted) setState(() => _isLoadingReferral = false);
-    }
-  }
-
-  void _copyCodeToClipboard(String code) {
-    Clipboard.setData(ClipboardData(text: code));
-    Get.snackbar(
-      'Copied!',
-      'Referral code copied to clipboard.',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.white,
-      colorText: AppColors.primaryPink,
-      duration: const Duration(seconds: 2),
-    );
   }
 
   Future<void> _logout() async {

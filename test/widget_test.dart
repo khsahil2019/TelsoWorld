@@ -15,6 +15,6 @@ void main() {
     await tester.pumpWidget(const TelsoWorldRootApp());
 
     // Verify that the splash screen renders the Telso World branding.
-    expect(find.text('Telso World'), findsOneWidget);
+    expect(find.text('TELSO WORLD'), findsOneWidget);
   });
 }

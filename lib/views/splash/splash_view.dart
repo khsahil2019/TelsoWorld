@@ -26,8 +26,8 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late AnimationController _progressController;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
   late Animation<double> _progressAnimation;
+  Timer? _routingTimer;
 
   @override
   void initState() {
@@ -41,10 +41,6 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
 
     _scaleAnimation = Tween<double>(begin: 0.92, end: 1.06).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: const Interval(0.0, 0.6, curve: Curves.easeIn)),
     );
 
     // 2. Linear loading progress bar controller (0.0 -> 1.0 over 2.4s)
@@ -63,13 +59,14 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _routingTimer?.cancel();
     _pulseController.dispose();
     _progressController.dispose();
     super.dispose();
   }
 
   void _startRoutingTimer() {
-    Future.delayed(const Duration(milliseconds: 2600), () {
+    _routingTimer = Timer(const Duration(milliseconds: 2600), () {
       if (!mounted) return;
       try {
         final authController = Get.find<AuthController>();
