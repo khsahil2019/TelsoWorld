@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
@@ -95,7 +96,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       // Load Wallet Balance Preview
       final walletResponse = await http.get(
-        Uri.parse('https://telsoworld.com/api/reporter/wallet'),
+        Uri.parse('${ApiEndpoints.baseUrl}/reporter/wallet'),
         headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
       ).timeout(const Duration(seconds: 15));
 
@@ -140,7 +141,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final token = await SessionTokenStore.getToken();
       if (token.isNotEmpty) {
         await http.post(
-          Uri.parse('https://telsoworld.com/api/reporter/logout'),
+          Uri.parse('${ApiEndpoints.baseUrl}/reporter/logout'),
           headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
         ).timeout(const Duration(seconds: 15));
       }

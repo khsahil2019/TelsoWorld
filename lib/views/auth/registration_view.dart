@@ -2,18 +2,29 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 
 /// ---------------------------------------------------------------------------
-/// 📝 MusicianRegistrationScreen (3-Step Creator Wizard with Bottom Sheet Dropdowns)
+/// 📝 MusicianRegistrationScreen
 /// ---------------------------------------------------------------------------
-/// Step 1: 👤 Musician & Identity (Name, Username, Email, DOB)
-/// Step 2: 📍 Contact & Location (Mobile, WhatsApp, Searchable Bottom Sheet States/Districts)
-/// Step 3: 🔐 Security & Referral (Password, Referral Code, Terms & Submit)
+/// Features:
+/// 1. 📲 Step 1: Mobile OTP and Email Verification (Both required)
+/// 2. 👤 Step 2: Creator Form opened after OTP verification:
+///    - User Name (Instagram-style unique handle with live availability check)
+///    - Mo no (Pre-filled from verified mobile)
+///    - Poss (Password with visibility toggle)
+///    - WhatsApp No. (with "Same as Mobile Number" toggle)
+///    - Happy Birthday 🎂 Date (Mandatory for birthday celebration system)
+///    - Referral Code (Dynamic referral link or manual input)
+///    - I agree to Terms & Conditions *
+///    - Submit button
+/// 3. 🎉 Step 3: Animated Welcome Popup with celebration graphics & wallet bonus!
 /// ---------------------------------------------------------------------------
 class MusicianRegistrationScreen extends StatefulWidget {
   const MusicianRegistrationScreen({super.key});
@@ -24,539 +35,585 @@ class MusicianRegistrationScreen extends StatefulWidget {
 }
 
 class _MusicianRegistrationScreenState
-    extends State<MusicianRegistrationScreen> {
-  final PageController _pageController = PageController();
-  int _currentStep = 0;
+    extends State<MusicianRegistrationScreen> with SingleTickerProviderStateMixin {
+  // Step 1: Verification Controllers
+  final TextEditingController _mobileCtrl = TextEditingController();
+  final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _otpCtrl = TextEditingController();
 
-  bool _agreeTerms = false;
+  // Step 2: Creator Form Controllers
+  final TextEditingController _usernameCtrl = TextEditingController();
+  final TextEditingController _passwordCtrl = TextEditingController();
+  final TextEditingController _whatsappCtrl = TextEditingController();
+  final TextEditingController _referralCtrl = TextEditingController();
+
+  // Verification & Status States
+  bool _isOtpSent = false;
+  bool _isOtpVerified = false;
+  bool _isSendingOtp = false;
+  bool _isVerifyingOtp = false;
+  bool _isRegistering = false;
+  int _resendCountdown = 0;
+  Timer? _countdownTimer;
+
+  // Form States
+  bool _sameAsMobile = true;
   bool _obscurePassword = true;
-  bool _isLoading = false;
-
-  String? _selectedState;
-  String? _selectedDistrict;
+  bool _agreeTerms = false;
   DateTime? _dob;
 
-  // Controllers
-  final _schoolNameCtrl = TextEditingController(); // school_name
-  final _mobileCtrl = TextEditingController(); // mobile_no
-  final _whatsappCtrl = TextEditingController(); // whatsapp
-  final _emailCtrl = TextEditingController(); // email
-  final _villageCtrl = TextEditingController(); // village
-  final _pincodeCtrl = TextEditingController(); // pincode
-  final _usernameCtrl = TextEditingController(); // username
-  final _passwordCtrl = TextEditingController(); // password
-  final _referralCtrl = TextEditingController(); // referral_code
+  // Real-time Username Availability Check
+  bool _isCheckingUsername = false;
+  bool? _isUsernameAvailable;
+  String _usernameFeedback = '';
+  Timer? _usernameDebounce;
 
-  final _states = [
-    'Andhra Pradesh',
-    'Arunachal Pradesh',
-    'Assam',
-    'Bihar',
-    'Chhattisgarh',
-    'Delhi',
-    'Goa',
-    'Gujarat',
-    'Haryana',
-    'Himachal Pradesh',
-    'Jharkhand',
-    'Karnataka',
-    'Kerala',
-    'Madhya Pradesh',
-    'Maharashtra',
-    'Manipur',
-    'Meghalaya',
-    'Mizoram',
-    'Nagaland',
-    'Odisha',
-    'Punjab',
-    'Rajasthan',
-    'Sikkim',
-    'Tamil Nadu',
-    'Telangana',
-    'Tripura',
-    'Uttar Pradesh',
-    'Uttarakhand',
-    'West Bengal',
-  ];
-
-  final _districtsByState = <String, List<String>>{
-    'Bihar': [
-      'Patna', 'Gaya', 'Bhagalpur', 'Muzaffarpur', 'Darbhanga', 'Purnia', 'Arrah (Bhojpur)',
-      'Begusarai', 'Katihar', 'Munger', 'Chhapra (Saran)', 'Saharsa', 'Sasaram (Rohtas)',
-      'Hajipur (Vaishali)', 'Dehri', 'Siwan', 'Motihari (East Champaran)', 'Nawada', 'Buxar',
-      'Kishanganj', 'Sitamarhi', 'Madhubani', 'Samastipur', 'Bettiah (West Champaran)'
-    ],
-    'Uttar Pradesh': [
-      'Lucknow', 'Varanasi', 'Kanpur', 'Agra', 'Prayagraj (Allahabad)', 'Gorakhpur', 'Noida (Gautam Buddha Nagar)',
-      'Ghaziabad', 'Meerut', 'Bareilly', 'Aligarh', 'Moradabad', 'Saharanpur', 'Jhansi', 'Ayodhya (Faizabad)',
-      'Mathura', 'Muzaffarnagar', 'Firozabad', 'Mirzapur', 'Basti', 'Azamgarh', 'Jaunpur', 'Ballia'
-    ],
-    'Rajasthan': [
-      'Jaipur', 'Jodhpur', 'Udaipur', 'Kota', 'Ajmer', 'Bikaner', 'Bhilwara', 'Alwar', 'Bharatpur',
-      'Sikar', 'Pali', 'Sri Ganganagar', 'Chittorgarh', 'Jhunjhunu', 'Barmer', 'Jaisalmer'
-    ],
-    'Gujarat': [
-      'Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar', 'Jamnagar', 'Junagadh', 'Gandhinagar',
-      'Anand', 'Navsari', 'Morbi', 'Mehsana', 'Bharuch', 'Porbandar', 'Valsad', 'Kutch'
-    ],
-    'Maharashtra': [
-      'Mumbai City', 'Mumbai Suburban', 'Pune', 'Nagpur', 'Nashik', 'Thane', 'Chhatrapati Sambhajinagar (Aurangabad)',
-      'Solapur', 'Amravati', 'Kolhapur', 'Navi Mumbai', 'Sangli', 'Jalgaon', 'Akola', 'Latur', 'Nanded'
-    ],
-    'Delhi': [
-      'New Delhi', 'Central Delhi', 'South Delhi', 'North Delhi', 'East Delhi', 'West Delhi',
-      'South West Delhi', 'North East Delhi', 'North West Delhi', 'Shahdara', 'South East Delhi'
-    ],
-    'Jharkhand': [
-      'Ranchi', 'Jamshedpur (East Singhbhum)', 'Dhanbad', 'Bokaro', 'Deoghar', 'Hazaribagh', 'Giridih',
-      'Ramgarh', 'Medininagar (Daltonganj)', 'Dumka', 'Chaibasa (West Singhbhum)', 'Koderma'
-    ],
-    'West Bengal': [
-      'Kolkata', 'Howrah', 'North 24 Parganas', 'South 24 Parganas', 'Siliguri (Darjeeling)',
-      'Durgapur (Paschim Bardhaman)', 'Asansol', 'Hooghly', 'Nadia', 'Murshidabad', 'Malda'
-    ],
-    'Madhya Pradesh': [
-      'Indore', 'Bhopal', 'Jabalpur', 'Gwalior', 'Ujjain', 'Sagar', 'Dewas', 'Satna', 'Ratlam', 'Rewa'
-    ],
-    'Haryana': [
-      'Gurugram', 'Faridabad', 'Panipat', 'Ambala', 'Yamunanagar', 'Rohtak', 'Hisar', 'Karnal', 'Sonipat', 'Panchkula'
-    ],
-    'Punjab': [
-      'Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala', 'Bathinda', 'Mohali (SAS Nagar)', 'Hoshiarpur', 'Pathankot'
-    ],
-    'Karnataka': [
-      'Bengaluru Urban', 'Bengaluru Rural', 'Mysuru', 'Hubballi-Dharwad', 'Mangaluru (Dakshina Kannada)',
-      'Belagavi', 'Kalaburagi', 'Davanagere', 'Ballari', 'Shivamogga', 'Tumakuru', 'Udupi'
-    ],
-    'Tamil Nadu': [
-      'Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tirunelveli', 'Tiruppur', 'Vellore', 'Erode'
-    ],
-    'Telangana': [
-      'Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar', 'Khammam', 'Ramagundam', 'Mahbubnagar', 'Nalgonda'
-    ],
-    'Andhra Pradesh': [
-      'Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Kurnool', 'Rajahmundry', 'Tirupati', 'Kakinada'
-    ],
-    'Odisha': [
-      'Bhubaneswar (Khurda)', 'Cuttack', 'Rourkela (Sundargarh)', 'Berhampur (Ganjam)', 'Sambalpur', 'Puri', 'Balasore'
-    ],
-    'Assam': [
-      'Guwahati (Kamrup Metro)', 'Silchar (Cachar)', 'Dibrugarh', 'Jorhat', 'Nagaon', 'Tinsukia', 'Tezpur (Sonitpur)'
-    ],
-    'Uttarakhand': [
-      'Dehradun', 'Haridwar', 'Roorkee', 'Haldwani (Nainital)', 'Rudrapur (Udham Singh Nagar)', 'Rishikesh', 'Almora'
-    ],
-    'Himachal Pradesh': [
-      'Shimla', 'Dharamshala (Kangra)', 'Mandi', 'Solan', 'Kullu', 'Baddi', 'Bilaspur', 'Hamirpur', 'Una'
-    ],
-    'Chhattisgarh': [
-      'Raipur', 'Bhilai (Durg)', 'Bilaspur', 'Korba', 'Rajnandgaon', 'Jagdalpur (Bastar)', 'Ambikapur (Surguja)'
-    ],
-    'Goa': ['North Goa (Panaji)', 'South Goa (Margao)'],
-  };
-
-  List<String> get _districts {
-    if (_selectedState == null) return [];
-    return _districtsByState[_selectedState!] ?? [
-      'Central District',
-      'North District',
-      'South District',
-      'East District',
-      'West District',
-    ];
+  @override
+  void initState() {
+    super.initState();
+    // Check if referral code was passed via arguments or route query
+    if (Get.arguments != null && Get.arguments is Map) {
+      final ref = Get.arguments['ref'] ?? Get.arguments['referral_code'];
+      if (ref != null) _referralCtrl.text = ref.toString();
+    } else if (Get.parameters.containsKey('ref')) {
+      _referralCtrl.text = Get.parameters['ref'] ?? '';
+    }
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
-    _schoolNameCtrl.dispose();
+    _countdownTimer?.cancel();
+    _usernameDebounce?.cancel();
     _mobileCtrl.dispose();
-    _whatsappCtrl.dispose();
     _emailCtrl.dispose();
-    _villageCtrl.dispose();
-    _pincodeCtrl.dispose();
+    _otpCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
+    _whatsappCtrl.dispose();
     _referralCtrl.dispose();
     super.dispose();
   }
 
-  // ── Validation Helpers ──
-  bool _isValidEmail(String email) {
-    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
-    return emailRegex.hasMatch(email.trim());
+  // ---------------------------------------------------------------------------
+  // ⏱️ Resend Countdown Timer
+  // ---------------------------------------------------------------------------
+  void _startResendTimer() {
+    _countdownTimer?.cancel();
+    setState(() => _resendCountdown = 30);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendCountdown > 1) {
+        setState(() => _resendCountdown--);
+      } else {
+        timer.cancel();
+        setState(() => _resendCountdown = 0);
+      }
+    });
   }
 
-  bool _isValidMobile(String phone) {
-    final clean = phone.replaceAll(RegExp(r'\D'), '');
-    return (clean.length == 10 && RegExp(r'^[6-9]\d{9}$').hasMatch(clean)) ||
-        (clean.length == 12 && clean.startsWith('91') && RegExp(r'^91[6-9]\d{9}$').hasMatch(clean));
+  // ---------------------------------------------------------------------------
+  // 📲 Send OTP to Mobile & Email
+  // ---------------------------------------------------------------------------
+  Future<void> _sendOtp() async {
+    final mobile = _mobileCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+
+    if (mobile.isEmpty || mobile.length < 10) {
+      _showSnackbar('Mobile Required', 'Please enter a valid 10-digit mobile number.', isError: true);
+      return;
+    }
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+      _showSnackbar('Email Required', 'Please enter a valid Gmail / Email address.', isError: true);
+      return;
+    }
+
+    setState(() => _isSendingOtp = true);
+
+    try {
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/send-otp');
+      final res = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({
+          'mobile_no': mobile,
+          'email': email,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode == 200 && data['status'] == true) {
+        setState(() {
+          _isOtpSent = true;
+          // In test mode, prefill or notify
+          if (data['otp'] != null) {
+            _otpCtrl.text = data['otp'].toString();
+          }
+        });
+        _startResendTimer();
+        _showSnackbar('OTP Sent', 'Verification code sent to $mobile & $email (Test OTP: ${data['otp'] ?? '123456'})');
+      } else {
+        _showSnackbar('Send Failed', data['message'] ?? 'Could not send OTP. Try again.', isError: true);
+      }
+    } catch (e) {
+      _showSnackbar('Connection Error', 'Could not reach server. Verify connection.', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSendingOtp = false);
+    }
   }
 
-  String get _dobDisplay => _dob == null
-      ? 'Select Date of Birth'
-      : '${_dob!.day.toString().padLeft(2, '0')}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.year}';
+  // ---------------------------------------------------------------------------
+  // ✅ Verify OTP
+  // ---------------------------------------------------------------------------
+  Future<void> _verifyOtp() async {
+    final otp = _otpCtrl.text.trim();
+    final mobile = _mobileCtrl.text.trim();
 
-  String get _dobApi => _dob == null
-      ? ''
-      : '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.day.toString().padLeft(2, '0')}';
+    if (otp.length < 4) {
+      _showSnackbar('Invalid OTP', 'Please enter the 6-digit OTP code received.', isError: true);
+      return;
+    }
 
-  Future<void> _pickDob() async {
-    final d = await showDatePicker(
+    setState(() => _isVerifyingOtp = true);
+
+    try {
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/verify-otp');
+      final res = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({
+          'mobile_no': mobile,
+          'email': _emailCtrl.text.trim(),
+          'otp': otp,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode == 200 && data['status'] == true) {
+        setState(() {
+          _isOtpVerified = true;
+          if (_sameAsMobile) {
+            _whatsappCtrl.text = mobile;
+          }
+        });
+        _showSnackbar('OTP Verified', 'Mobile & Email verified! Complete your creator profile below.');
+      } else {
+        _showSnackbar('Verification Failed', data['message'] ?? 'Invalid or expired OTP. (Try 123456)', isError: true);
+      }
+    } catch (e) {
+      _showSnackbar('Connection Error', 'Verification server unreachable.', isError: true);
+    } finally {
+      if (mounted) setState(() => _isVerifyingOtp = false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 🔍 Real-time Instagram-Style Handle Availability Check
+  // ---------------------------------------------------------------------------
+  void _onUsernameChanged(String value) {
+    _usernameDebounce?.cancel();
+    final clean = value.trim().toLowerCase().replaceAll('@', '');
+
+    if (clean.length < 3) {
+      setState(() {
+        _isUsernameAvailable = null;
+        _usernameFeedback = clean.isEmpty ? '' : 'Must be at least 3 characters';
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingUsername = true;
+      _usernameFeedback = 'Checking availability...';
+    });
+
+    _usernameDebounce = Timer(const Duration(milliseconds: 400), () async {
+      try {
+        final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/check-username?username=$clean');
+        final res = await http.get(uri).timeout(const Duration(seconds: 6));
+        final data = jsonDecode(res.body);
+
+        if (mounted) {
+          setState(() {
+            _isCheckingUsername = false;
+            _isUsernameAvailable = data['available'] == true;
+            _usernameFeedback = data['message'] ?? (data['available'] ? '@$clean is available!' : 'Already taken');
+          });
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _isCheckingUsername = false;
+            _isUsernameAvailable = true;
+            _usernameFeedback = '@$clean ready';
+          });
+        }
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 🎂 Mandatory Happy Birthday Date Picker
+  // ---------------------------------------------------------------------------
+  Future<void> _pickBirthday() async {
+    final now = DateTime.now();
+    final initial = _dob ?? DateTime(now.year - 20, 1, 1);
+    final first = DateTime(1940);
+    final last = DateTime(now.year - 5);
+
+    final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime(2000),
-      firstDate: DateTime(1950),
-      lastDate: DateTime.now(),
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
+      helpText: 'SELECT YOUR HAPPY BIRTHDAY 🎂',
+      confirmText: 'SET BIRTHDAY',
+      cancelText: 'CANCEL',
       builder: (ctx, child) => Theme(
         data: ThemeData.dark().copyWith(
           colorScheme: const ColorScheme.dark(
             primary: AppColors.primaryPink,
             onPrimary: Colors.white,
-            surface: Color(0xFF1E1E28),
+            surface: Color(0xFF161622),
             onSurface: Colors.white,
-          ), dialogTheme: DialogThemeData(backgroundColor: const Color(0xFF181822)),
+          ),
+          dialogTheme: const DialogThemeData(
+            backgroundColor: Color(0xFF14141E),
+          ),
         ),
         child: child!,
       ),
     );
-    if (d != null) setState(() => _dob = d);
+
+    if (picked != null) {
+      setState(() => _dob = picked);
+    }
   }
 
-  void _showError(String message) {
-    Get.snackbar(
-      'Validation Error',
-      message,
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: const Color(0xFF1E1E24),
-      colorText: const Color(0xFFFF6584),
-      margin: const EdgeInsets.all(16),
-      icon: const Icon(Icons.error_outline_rounded, color: Color(0xFFFF6584)),
-      duration: const Duration(seconds: 3),
-    );
-  }
-
-  void _goToStep(int step) {
-    setState(() => _currentStep = step);
-    _pageController.animateToPage(
-      step,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeInOut,
-    );
-  }
-
-  // ── Step 1 Validation ──
-  void _validateStep1AndNext() {
-    final name = _schoolNameCtrl.text.trim();
-    final username = _usernameCtrl.text.trim();
-    final email = _emailCtrl.text.trim();
-
-    if (name.isEmpty) {
-      _showError('Please enter your Musician / Channel Name.');
-      return;
-    }
-    if (name.length < 2) {
-      _showError('Musician / Channel Name must be at least 2 characters.');
-      return;
-    }
-    if (username.isEmpty) {
-      _showError('Please choose a unique username.');
-      return;
-    }
-    if (username.length < 3) {
-      _showError('Username must be at least 3 characters.');
-      return;
-    }
-    if (username.contains(' ')) {
-      _showError('Username cannot contain spaces.');
-      return;
-    }
-    if (email.isEmpty) {
-      _showError('Please enter your email address.');
-      return;
-    }
-    if (!_isValidEmail(email)) {
-      _showError('Please enter a valid email address (e.g. yourname@gmail.com).');
-      return;
-    }
-    if (_dob == null) {
-      _showError('Please select your Date of Birth.');
-      return;
-    }
-    _goToStep(1);
-  }
-
-  // ── Step 2 Validation ──
-  void _validateStep2AndNext() {
+  // ---------------------------------------------------------------------------
+  // 📝 Submit Creator Registration Form
+  // ---------------------------------------------------------------------------
+  Future<void> _submitRegistration() async {
+    final username = _usernameCtrl.text.trim().toLowerCase().replaceAll('@', '');
+    final password = _passwordCtrl.text;
     final mobile = _mobileCtrl.text.trim();
     final whatsapp = _whatsappCtrl.text.trim();
-    final pincode = _pincodeCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final referral = _referralCtrl.text.trim();
 
-    if (mobile.isEmpty) {
-      _showError('Please enter your mobile number.');
+    // 1. Mandatory Username
+    if (username.length < 3) {
+      _showSnackbar('User Name Required', 'Please choose a unique creator handle (@username).', isError: true);
       return;
     }
-    if (!_isValidMobile(mobile)) {
-      _showError('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).');
+    if (_isUsernameAvailable == false) {
+      _showSnackbar('User Name Taken', 'This username is already taken. Please pick another.', isError: true);
       return;
     }
-    if (whatsapp.isNotEmpty && !_isValidMobile(whatsapp)) {
-      _showError('Please enter a valid 10-digit WhatsApp number or leave it blank.');
-      return;
-    }
-    if (_selectedState == null) {
-      _showError('Please select your State.');
-      return;
-    }
-    if (_selectedDistrict == null) {
-      _showError('Please select your District.');
-      return;
-    }
-    if (pincode.isNotEmpty && pincode.length != 6) {
-      _showError('Please enter a valid 6-digit Pincode.');
-      return;
-    }
-    _goToStep(2);
-  }
 
-  // ── Final Registration API ──
-  Future<void> _register() async {
-    if (_passwordCtrl.text.isEmpty || _passwordCtrl.text.length < 4) {
-      _showError('Password must be at least 4 characters long.');
+    // 2. Mandatory Mobile
+    if (mobile.length < 10) {
+      _showSnackbar('Mobile Required', 'Valid 10-digit mobile number required.', isError: true);
       return;
     }
+
+    // 3. Mandatory Password
+    if (password.length < 4) {
+      _showSnackbar('Password Required', 'Password must be at least 4 characters.', isError: true);
+      return;
+    }
+
+    // 4. Mandatory Birthday 🎂 (Explicit User Requirement)
+    if (_dob == null) {
+      _showSnackbar('Birthday Required 🎂', 'Happy Birthday Date is mandatory so we can celebrate your special day!', isError: true);
+      return;
+    }
+
+    // 5. Terms & Conditions
     if (!_agreeTerms) {
-      _showError('Please agree to the Terms & Conditions to complete registration.');
+      _showSnackbar('Terms & Conditions', 'Please accept the Terms & Conditions to complete registration.', isError: true);
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _isRegistering = true);
+
+    final dobString = '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.day.toString().padLeft(2, '0')}';
 
     try {
-      final uri = Uri.parse('https://telsoworld.com/api/reporter/register');
-
-      final cleanMobile = _mobileCtrl.text.trim().replaceAll(RegExp(r'\D'), '');
-      final cleanWhatsapp = _whatsappCtrl.text.trim().replaceAll(RegExp(r'\D'), '');
-
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/register');
       final body = {
-        'school_name': _schoolNameCtrl.text.trim(),
-        'mobile_no': cleanMobile.length == 12 ? cleanMobile.substring(2) : cleanMobile,
-        'whatsapp': cleanWhatsapp.isNotEmpty
-            ? (cleanWhatsapp.length == 12 ? cleanWhatsapp.substring(2) : cleanWhatsapp)
-            : (cleanMobile.length == 12 ? cleanMobile.substring(2) : cleanMobile),
-        'email': _emailCtrl.text.trim().toLowerCase(),
-        'village': _villageCtrl.text.trim().isNotEmpty ? _villageCtrl.text.trim() : 'City',
-        'pincode': _pincodeCtrl.text.trim().isNotEmpty ? _pincodeCtrl.text.trim() : '110001',
-        'dob': _dobApi,
-        'district': _selectedDistrict!,
-        'state': _selectedState!,
+        'username': username,
+        'name': username,
+        'mobile_no': mobile,
+        'whatsapp': whatsapp.isNotEmpty ? whatsapp : mobile,
+        'whatsapp_no': whatsapp.isNotEmpty ? whatsapp : mobile,
+        'email': email,
+        'password': password,
+        'dob': dobString,
+        'referral_code': referral,
         'terms': '1',
-        'username': _usernameCtrl.text.trim().toLowerCase(),
-        'password': _passwordCtrl.text,
-        'referral_code': _referralCtrl.text.trim(),
       };
 
-      final response = await http
-          .post(
-            uri,
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Accept': 'application/json',
-            },
-            body: body,
-          )
-          .timeout(const Duration(seconds: 25));
+      final res = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 25));
 
-      if (!mounted) return;
+      final data = jsonDecode(res.body);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final Map<String, dynamic> json =
-            jsonDecode(response.body) as Map<String, dynamic>;
+      if ((res.statusCode == 200 || res.statusCode == 201) && data['status'] == true) {
+        final token = data['token']?.toString() ?? data['data']?['token']?.toString() ?? '';
+        if (token.isNotEmpty) {
+          await SessionTokenStore.setToken(token);
+        }
 
-        final bool status = json['status'] == true || json['status'] == 1;
-
-        if (status) {
-          try {
-            final dynamic rawToken = json['token'] ?? (json['data']?['token']);
-            final token = rawToken?.toString();
-            if (token != null && token.isNotEmpty) {
-              await SessionTokenStore.setToken(token);
-            }
-          } catch (_) {}
-
-          Get.offAllNamed(AppRoutes.registrationSuccess);
-        } else {
-          final msg = json['message']?.toString() ?? 'Registration failed. Try again.';
-          _showError(msg);
+        if (mounted) {
+          _showAnimatedWelcomePopup(
+            username: username,
+            dobFormatted: '${_dob!.day.toString().padLeft(2, '0')}/${_dob!.month.toString().padLeft(2, '0')}/${_dob!.year}',
+            walletBonus: '50.00',
+          );
         }
       } else {
-        _showError('Server error (${response.statusCode}). Please try again.');
+        _showSnackbar('Registration Error', data['message'] ?? 'Failed to register. Please try again.', isError: true);
       }
     } catch (e) {
-      _showError('Unable to connect to server. Please check your internet connection.');
+      _showSnackbar('Server Connection', 'Could not complete registration. Check connection.', isError: true);
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isRegistering = false);
     }
   }
 
-  // ── Modern Searchable Bottom Sheet Modal Selector ──
-  void _openSearchableBottomSheet({
-    required String title,
-    required List<String> items,
-    required String? selectedValue,
-    required ValueChanged<String> onSelected,
+  // ---------------------------------------------------------------------------
+  // 🎉 Animated Welcome Celebration Popup (User Requirement)
+  // ---------------------------------------------------------------------------
+  void _showAnimatedWelcomePopup({
+    required String username,
+    required String dobFormatted,
+    required String walletBonus,
   }) {
-    showModalBottomSheet<void>(
+    showGeneralDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        String query = '';
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final filtered = items.where((item) {
-              if (query.isEmpty) return true;
-              return item.toLowerCase().contains(query.toLowerCase());
-            }).toList();
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.72,
-              decoration: const BoxDecoration(
-                color: Color(0xFF12121A),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border(
-                  top: BorderSide(color: Colors.white12, width: 1),
+      barrierDismissible: false,
+      barrierLabel: 'WelcomeModal',
+      barrierColor: Colors.black.withValues(alpha: 0.85),
+      transitionDuration: const Duration(milliseconds: 500),
+      pageBuilder: (ctx, anim1, anim2) {
+        return const SizedBox.shrink();
+      },
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        final curved = CurvedAnimation(parent: anim1, curve: Curves.elasticOut);
+        return ScaleTransition(
+          scale: curved,
+          child: Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1B1428), Color(0xFF13101E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(color: AppColors.primaryPink.withValues(alpha: 0.5), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryPink.withValues(alpha: 0.35),
+                      blurRadius: 36,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
                 ),
-              ),
-              child: Column(
-                children: [
-                  // Top Notch Grab Handle
-                  Center(
-                    child: Container(
-                      margin: const EdgeInsets.only(top: 12, bottom: 8),
-                      width: 44,
-                      height: 4,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Celebratory Emoji Cluster
+                    Container(
+                      width: 90,
+                      height: 90,
                       decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(2),
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF2A6D), Color(0xFF7928CA)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF2A6D).withValues(alpha: 0.4),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '🎂',
+                          style: TextStyle(fontSize: 44),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 18),
 
-                  // Header with Close
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Row(
+                    // Welcome Headline
+                    const Text(
+                      '🎉 WELCOME TO TELSO WORLD! 🎉',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Unique Handle Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryPink.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.primaryPink.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        '@$username',
+                        style: const TextStyle(
+                          color: AppColors.primaryPink,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Details Card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFF2A6D).withOpacity(0.15),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.map_rounded, color: Color(0xFFFF2A6D), size: 18),
-                              ),
-                              const SizedBox(width: 10),
+                              const Text('🎁', style: TextStyle(fontSize: 20)),
+                              const SizedBox(width: 12),
                               Expanded(
-                                child: Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Creator Welcome Bonus', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                    Text('₹$walletBonus Credited to Wallet', style: const TextStyle(color: Color(0xFF10B981), fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 20),
-                          onPressed: () => Navigator.pop(ctx),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // 🔍 Search Bar inside Bottom Sheet
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                    child: Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1B1B26),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
-                      ),
-                      child: TextField(
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        onChanged: (val) => setModalState(() => query = val.trim()),
-                        decoration: InputDecoration(
-                          hintText: 'Search $title...',
-                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFFFF2A6D), size: 18),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
+                          const Divider(color: Colors.white12, height: 20),
+                          Row(
+                            children: [
+                              const Text('🎂', style: TextStyle(fontSize: 20)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Birthday Wishes Scheduled', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                    Text(dobFormatted, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 24),
 
-                  // Items List
-                  Expanded(
-                    child: filtered.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No matching results found',
-                              style: TextStyle(color: Colors.white38, fontSize: 13),
+                    // Start Creating & Explore Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          Get.offAllNamed(AppRoutes.main);
+                        },
+                        child: Ink(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF2A6D), Color(0xFF7928CA)],
                             ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, __) => Divider(color: Colors.white.withOpacity(0.05), height: 1),
-                            itemBuilder: (context, index) {
-                              final item = filtered[index];
-                              final isSelected = item == selectedValue;
-
-                              return ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                tileColor: isSelected ? const Color(0xFFFF2A6D).withOpacity(0.12) : Colors.transparent,
-                                title: Text(
-                                  item,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF2A6D).withValues(alpha: 0.35),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '🚀 START EXPLORING FEED',
                                   style: TextStyle(
-                                    color: isSelected ? Colors.white : Colors.white70,
+                                    color: Colors.white,
                                     fontSize: 14,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
                                   ),
                                 ),
-                                trailing: isSelected
-                                    ? const Icon(Icons.check_circle_rounded, color: Color(0xFFFF2A6D), size: 20)
-                                    : null,
-                                onTap: () {
-                                  onSelected(item);
-                                  Navigator.pop(ctx);
-                                },
-                              );
-                            },
+                                SizedBox(width: 8),
+                                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                              ],
+                            ),
                           ),
-                  ),
-                ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
+            ),
+          ),
         );
       },
     );
   }
 
+  void _showSnackbar(String title, String message, {bool isError = false}) {
+    Get.snackbar(
+      title,
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: const Color(0xFF161622),
+      colorText: isError ? const Color(0xFFFF6584) : const Color(0xFF10B981),
+      margin: const EdgeInsets.all(16),
+      icon: Icon(
+        isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+        color: isError ? const Color(0xFFFF6584) : const Color(0xFF10B981),
+      ),
+      duration: const Duration(seconds: 4),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 🎨 BUILD SCREEN
+  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -566,23 +623,17 @@ class _MusicianRegistrationScreenState
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-          onPressed: () {
-            if (_currentStep > 0) {
-              _goToStep(_currentStep - 1);
-            } else {
-              Navigator.maybePop(context);
-            }
-          },
+          onPressed: () => Navigator.maybePop(context),
         ),
         title: const Text(
-          'Creator Registration',
-          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+          'Telso Creator Registration',
+          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
       ),
       body: Stack(
         children: [
-          // 🌌 Ambient Glowing Background
+          // Ambient Glow Background
           Positioned(
             top: -40,
             right: -40,
@@ -591,10 +642,10 @@ class _MusicianRegistrationScreenState
               height: 260,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFFD70F64).withOpacity(0.16),
+                color: const Color(0xFFD70F64).withValues(alpha: 0.16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFD70F64).withOpacity(0.3),
+                    color: const Color(0xFFD70F64).withValues(alpha: 0.3),
                     blurRadius: 120,
                   ),
                 ],
@@ -602,466 +653,526 @@ class _MusicianRegistrationScreenState
             ),
           ),
 
-          // Main Column
-          Column(
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Step 1: Verification Card
+                  _buildVerificationCard(),
+
+                  const SizedBox(height: 20),
+
+                  // Step 2: Creator Profile Form (Revealed / Unlocked after verification)
+                  if (_isOtpVerified)
+                    _buildCreatorForm()
+                  else
+                    _buildLockedFormNotice(),
+
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 📱 STEP 1: VERIFICATION CARD (Mobile OTP & Email)
+  // ---------------------------------------------------------------------------
+  Widget _buildVerificationCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF13131E),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: _isOtpVerified ? const Color(0xFF10B981).withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              const SizedBox(height: 12),
-
-              // 🌟 Top 3-Step Indicator Bar
-              _buildStepProgressBar(),
-              const SizedBox(height: 16),
-
-              // 📄 PageView for 3 Step Screens
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (_isOtpVerified ? const Color(0xFF10B981) : AppColors.primaryPink).withValues(alpha: 0.18),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _isOtpVerified ? Icons.check_circle_rounded : Icons.shield_rounded,
+                  color: _isOtpVerified ? const Color(0xFF10B981) : AppColors.primaryPink,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildStep1Identity(),
-                    _buildStep2Location(),
-                    _buildStep3Security(),
+                    Text(
+                      _isOtpVerified ? 'Step 1: Verified Successfully ✓' : 'Step 1: Mobile & Email Verification',
+                      style: TextStyle(
+                        color: _isOtpVerified ? const Color(0xFF10B981) : Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      _isOtpVerified
+                          ? 'Identity confirmed. Proceed to fill creator details below.'
+                          : 'Both Mobile OTP & Gmail required to secure your account.',
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  /// 🌟 3-Step Visual Progress Indicator
-  Widget _buildStepProgressBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF13131D),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
-        ),
-        child: Row(
-          children: [
-            _buildStepIcon(stepIndex: 0, label: 'Identity', icon: Icons.person_rounded),
-            _buildStepConnector(isCompleted: _currentStep >= 1),
-            _buildStepIcon(stepIndex: 1, label: 'Contact', icon: Icons.location_on_rounded),
-            _buildStepConnector(isCompleted: _currentStep >= 2),
-            _buildStepIcon(stepIndex: 2, label: 'Security', icon: Icons.lock_rounded),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStepIcon({
-    required int stepIndex,
-    required String label,
-    required IconData icon,
-  }) {
-    final isDone = _currentStep > stepIndex;
-    final isCurrent = _currentStep == stepIndex;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: isCurrent || isDone
-                ? const LinearGradient(
-                    colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
-                  )
-                : null,
-            color: isCurrent || isDone ? null : const Color(0xFF1F1F2C),
-            boxShadow: isCurrent
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFFFF2A6D).withOpacity(0.5),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : [],
-          ),
-          child: Center(
-            child: isDone
-                ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
-                : Icon(
-                    icon,
-                    color: isCurrent ? Colors.white : Colors.white38,
-                    size: 16,
-                  ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: isCurrent ? Colors.white : Colors.white38,
-            fontSize: 10.5,
-            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStepConnector({required bool isCompleted}) {
-    return Expanded(
-      child: Container(
-        height: 2.5,
-        margin: const EdgeInsets.only(bottom: 14, left: 6, right: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(2),
-          color: isCompleted ? const Color(0xFFFF2A6D) : Colors.white12,
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────
-  // STEP 1: Musician & Identity Info
-  // ─────────────────────────────────────────
-  Widget _buildStep1Identity() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildStepHeader(
-            title: 'Step 1: Musician & Profile',
-            subtitle: 'Enter your artist name, username, and valid email',
-            badge: '1 / 3',
-          ),
           const SizedBox(height: 18),
 
-          _buildFormCard([
-            _buildInputField(
-              label: 'Musician / Channel Name *',
-              hint: 'e.g. Sahil Music Records',
-              controller: _schoolNameCtrl,
-              icon: Icons.music_note_rounded,
-            ),
-            const SizedBox(height: 14),
-            _buildInputField(
-              label: 'Unique Username *',
-              hint: 'e.g. sahil_star (no spaces)',
-              controller: _usernameCtrl,
-              icon: Icons.alternate_email_rounded,
-            ),
-            const SizedBox(height: 14),
-            _buildInputField(
-              label: 'Email Address *',
-              hint: 'e.g. yourname@gmail.com',
-              controller: _emailCtrl,
-              icon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 14),
-            // Birthday Date Picker
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Date of Birth *',
-                  style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: _pickDob,
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF191924),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white.withOpacity(0.06)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _dobDisplay,
-                          style: TextStyle(
-                            color: _dob == null ? Colors.white30 : Colors.white,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const Icon(Icons.cake_rounded, color: Color(0xFFFF2A6D), size: 18),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ]),
-          const SizedBox(height: 24),
-
-          // Continue Button
-          _buildActionButton(
-            label: 'Continue to Contact',
-            icon: Icons.arrow_forward_rounded,
-            onTap: _validateStep1AndNext,
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────
-  // STEP 2: Contact & Location Info
-  // ─────────────────────────────────────────
-  Widget _buildStep2Location() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildStepHeader(
-            title: 'Step 2: Contact & Location',
-            subtitle: 'Provide verified phone and choose state & district',
-            badge: '2 / 3',
-          ),
-          const SizedBox(height: 18),
-
-          _buildFormCard([
-            _buildInputField(
-              label: 'Mobile Number *',
-              hint: '10-digit mobile number (e.g. 9876543210)',
-              controller: _mobileCtrl,
-              icon: Icons.phone_android_rounded,
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 14),
-            _buildInputField(
-              label: 'WhatsApp Number (Optional)',
-              hint: 'Same or 10-digit alternate number',
-              controller: _whatsappCtrl,
-              icon: Icons.chat_rounded,
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 14),
-
-            // 🌟 Bottom Sheet State & District Selectors
-            Row(
-              children: [
-                Expanded(
-                  child: _buildBottomSheetTrigger(
-                    label: 'State *',
-                    hint: 'Select State',
-                    value: _selectedState,
-                    onTap: () {
-                      _openSearchableBottomSheet(
-                        title: 'Select State',
-                        items: _states,
-                        selectedValue: _selectedState,
-                        onSelected: (val) {
-                          setState(() {
-                            _selectedState = val;
-                            _selectedDistrict = null; // Reset district when state changes
-                          });
-                        },
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildBottomSheetTrigger(
-                    label: 'District *',
-                    hint: _selectedState == null ? 'Choose State First' : 'Select District',
-                    value: _selectedDistrict,
-                    onTap: () {
-                      if (_selectedState == null) {
-                        _showError('Please select a State first.');
-                        return;
-                      }
-                      _openSearchableBottomSheet(
-                        title: 'Select District ($_selectedState)',
-                        items: _districts,
-                        selectedValue: _selectedDistrict,
-                        onSelected: (val) {
-                          setState(() => _selectedDistrict = val);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _buildInputField(
-                    label: 'Village / City',
-                    hint: 'Locality',
-                    controller: _villageCtrl,
-                    icon: Icons.home_rounded,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildInputField(
-                    label: 'Pincode',
-                    hint: '6-digit PIN',
-                    controller: _pincodeCtrl,
-                    icon: Icons.pin_drop_rounded,
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-              ],
-            ),
-          ]),
-          const SizedBox(height: 24),
-
-          // Continue Button
-          _buildActionButton(
-            label: 'Continue to Security',
-            icon: Icons.arrow_forward_rounded,
-            onTap: _validateStep2AndNext,
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────
-  // STEP 3: Security & Referral
-  // ─────────────────────────────────────────
-  Widget _buildStep3Security() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildStepHeader(
-            title: 'Step 3: Security & Referral',
-            subtitle: 'Set your password and finish account registration',
-            badge: '3 / 3',
-          ),
-          const SizedBox(height: 18),
-
-          _buildFormCard([
-            // Password Field
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Password *',
-                  style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF191924),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
-                  ),
-                  child: TextField(
-                    controller: _passwordCtrl,
-                    obscureText: _obscurePassword,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: 'Create a secure password (min 4 chars)',
-                      hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
-                      prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFFFF2A6D), size: 18),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                          color: Colors.white38,
-                          size: 18,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _buildInputField(
-              label: 'Referral Code (Optional)',
-              hint: 'e.g. TELSO882',
-              controller: _referralCtrl,
-              icon: Icons.card_giftcard_rounded,
-            ),
-          ]),
-          const SizedBox(height: 18),
-
-          // Summary Mini Review Box
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF14141E),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.2)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.check_circle_outline_rounded, color: Color(0xFF00E5FF), size: 16),
-                    SizedBox(width: 6),
-                    Text('Account Summary', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '• Creator: ${_schoolNameCtrl.text.isNotEmpty ? _schoolNameCtrl.text : "Musician"} (@${_usernameCtrl.text})\n• Mobile: ${_mobileCtrl.text}\n• Email: ${_emailCtrl.text}\n• Region: ${_selectedDistrict ?? ""}, ${_selectedState ?? ""}',
-                  style: TextStyle(color: Colors.white.withOpacity(0.65), fontSize: 12, height: 1.45),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Terms Checkbox
+          // Mobile Number Input
+          _buildFieldLabel('Mobile Number *', Icons.phone_android_rounded),
+          const SizedBox(height: 6),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: Checkbox(
-                  value: _agreeTerms,
-                  activeColor: const Color(0xFFFF2A6D),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-                  side: BorderSide(color: Colors.white.withOpacity(0.3)),
-                  onChanged: (v) => setState(() => _agreeTerms = v ?? false),
+              Container(
+                height: 50,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C28),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: const Center(
+                  child: Text(
+                    '+91',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    text: 'I agree to the ',
-                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
-                    children: const [
-                      TextSpan(
-                        text: 'Terms & Conditions',
-                        style: TextStyle(color: Color(0xFFFF6584), fontWeight: FontWeight.bold),
-                      ),
-                      TextSpan(text: ' and Privacy Policy of Telso World.'),
-                    ],
+                child: TextField(
+                  controller: _mobileCtrl,
+                  enabled: !_isOtpVerified,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                  decoration: _inputDecoration(
+                    hint: '10-digit mobile number',
+                    suffixIcon: _isOtpVerified
+                        ? const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20)
+                        : null,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
 
-          // Final Submit Button
+          const SizedBox(height: 14),
+
+          // Gmail / Email Input
+          _buildFieldLabel('Gmail / Email *', Icons.email_rounded),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _emailCtrl,
+            enabled: !_isOtpVerified,
+            keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            decoration: _inputDecoration(
+              hint: 'yourname@gmail.com',
+              suffixIcon: _isOtpVerified
+                  ? const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20)
+                  : null,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Send OTP Button (Only before OTP verified)
+          if (!_isOtpVerified) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryPink,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: _isSendingOtp ? null : _sendOtp,
+                child: _isSendingOtp
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text(
+                        _isOtpSent ? (_resendCountdown > 0 ? 'Resend in ${_resendCountdown}s' : 'Resend OTP') : 'Send Verification OTP',
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+              ),
+            ),
+
+            // OTP Box (Revealed once sent)
+            if (_isOtpSent) ...[
+              const SizedBox(height: 18),
+              _buildFieldLabel('Enter 6-Digit Verification OTP', Icons.pin_rounded),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _otpCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 8),
+                textAlign: TextAlign.center,
+                decoration: _inputDecoration(
+                  hint: '••••••',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: _isVerifyingOtp ? null : _verifyOtp,
+                  child: _isVerifyingOtp
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text(
+                          'Verify OTP & Open Creator Form',
+                          style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLockedFormNotice() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF13131E).withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.lock_outline_rounded, color: Colors.white38, size: 28),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Step 2: Creator Form Locked',
+            style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Verify your Mobile & Gmail in Step 1 above to open your creator profile form.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white38, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 📝 STEP 2: CREATOR REGISTRATION FORM
+  // ---------------------------------------------------------------------------
+  Widget _buildCreatorForm() {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: const Color(0xFF13131E),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.primaryPink.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryPink.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryPink.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person_pin_rounded, color: AppColors.primaryPink, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Step 2: Creator Details Form',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'Instagram-style handle & Mandatory Birthday Setup',
+                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // 1. User Name (Instagram-style handle)
+          _buildFieldLabel('User Name (Unique Creator Handle) *', Icons.alternate_email_rounded),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _usernameCtrl,
+            onChanged: _onUsernameChanged,
+            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            decoration: _inputDecoration(
+              hint: 'username (e.g. rahul_music, priya.singh)',
+              prefixText: '@',
+              prefixStyle: const TextStyle(color: AppColors.primaryPink, fontWeight: FontWeight.bold, fontSize: 15),
+              suffixIcon: _isCheckingUsername
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryPink)),
+                    )
+                  : (_isUsernameAvailable == true
+                      ? const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20)
+                      : (_isUsernameAvailable == false
+                          ? const Icon(Icons.cancel_rounded, color: Color(0xFFFF6584), size: 20)
+                          : null)),
+            ),
+          ),
+          if (_usernameFeedback.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              _usernameFeedback,
+              style: TextStyle(
+                color: _isUsernameAvailable == true ? const Color(0xFF10B981) : const Color(0xFFFF6584),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
+          // 2. Mo no (Verified Mobile, Locked)
+          _buildFieldLabel('Mo no (Verified Mobile)', Icons.phone_android_rounded),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _mobileCtrl,
+            enabled: false,
+            style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600),
+            decoration: _inputDecoration(
+              hint: 'Mobile number',
+              suffixIcon: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('✓ Verified', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 3. Poss (Password)
+          _buildFieldLabel('Poss (Password) *', Icons.lock_outline_rounded),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _passwordCtrl,
+            obscureText: _obscurePassword,
+            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            decoration: _inputDecoration(
+              hint: 'Create a secure password',
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                  color: Colors.white54,
+                  size: 20,
+                ),
+                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 4. WhatsApp No. (with "Same as Mobile" checkbox)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildFieldLabel('WhatsApp No. *', Icons.chat_rounded),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Checkbox(
+                    value: _sameAsMobile,
+                    activeColor: AppColors.primaryPink,
+                    visualDensity: VisualDensity.compact,
+                    onChanged: (val) {
+                      setState(() {
+                        _sameAsMobile = val ?? false;
+                        if (_sameAsMobile) {
+                          _whatsappCtrl.text = _mobileCtrl.text;
+                        }
+                      });
+                    },
+                  ),
+                  const Text('Same as Mobile', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _whatsappCtrl,
+            enabled: !_sameAsMobile,
+            keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
+            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            decoration: _inputDecoration(
+              hint: '10-digit WhatsApp number',
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // 5. Happy birthday 🎂 Date (Mandatory!)
+          Row(
+            children: [
+              const Text('🎂', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 6),
+              const Text(
+                'Happy birthday 🎂 Date * (Mandatory)',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF2A6D).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('Required', style: TextStyle(color: Color(0xFFFF2A6D), fontSize: 9, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Birthday is must so Telso World can celebrate & send you special wishes!',
+            style: TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _pickBirthday,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1C1C28),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _dob != null ? const Color(0xFFFF2A6D) : Colors.white.withValues(alpha: 0.1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.cake_rounded, color: AppColors.primaryPink, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _dob != null
+                          ? '${_dob!.day.toString().padLeft(2, '0')}/${_dob!.month.toString().padLeft(2, '0')}/${_dob!.year}'
+                          : 'Select your birthday date 🎂',
+                      style: TextStyle(
+                        color: _dob != null ? Colors.white : Colors.white38,
+                        fontSize: 14,
+                        fontWeight: _dob != null ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.calendar_month_rounded, color: Colors.white54, size: 18),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // 6. Referral Code (Dynamic / Manual)
+          _buildFieldLabel('Referral Code (Optional - ₹50 Bonus)', Icons.card_giftcard_rounded),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _referralCtrl,
+            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            decoration: _inputDecoration(
+              hint: 'e.g. TELSO2026',
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // 7. I agree to Terms & Conditions *
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Checkbox(
+                value: _agreeTerms,
+                activeColor: AppColors.primaryPink,
+                onChanged: (val) => setState(() => _agreeTerms = val ?? false),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _agreeTerms = !_agreeTerms),
+                  child: const Text(
+                    'I agree to the Terms & Conditions *',
+                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 22),
+
+          // 8. Submit Button
           SizedBox(
             width: double.infinity,
             height: 52,
@@ -1072,250 +1183,89 @@ class _MusicianRegistrationScreenState
                 padding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              onPressed: _isLoading ? null : _register,
+              onPressed: _isRegistering ? null : _submitRegistration,
               child: Ink(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
+                    colors: [Color(0xFFFF2A6D), Color(0xFF7928CA)],
                   ),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFD70F64).withOpacity(0.5),
+                      color: const Color(0xFFFF2A6D).withValues(alpha: 0.35),
                       blurRadius: 18,
                       offset: const Offset(0, 6),
                     ),
                   ],
                 ),
                 child: Center(
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                        )
+                  child: _isRegistering
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              'Complete Registration',
+                              'SUBMIT & JOIN AS CREATOR',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
                               ),
                             ),
                             SizedBox(width: 8),
-                            Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                            Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
                           ],
                         ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  // ── Helper Widgets ──
-
-  Widget _buildStepHeader({
-    required String title,
-    required String subtitle,
-    required String badge,
-  }) {
+  Widget _buildFieldLabel(String label, IconData icon) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFF2A6D).withOpacity(0.15),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFFF2A6D).withOpacity(0.3)),
-          ),
-          child: Text(
-            badge,
-            style: const TextStyle(color: Color(0xFFFF6584), fontSize: 12, fontWeight: FontWeight.bold),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFormCard(List<Widget> children) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF13131D),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-
-  Widget _buildInputField({
-    required String label,
-    required String hint,
-    required TextEditingController controller,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+        Icon(icon, color: AppColors.primaryPink, size: 15),
+        const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF191924),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
-          ),
-          child: TextField(
-            controller: controller,
-            keyboardType: keyboardType,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
-              prefixIcon: Icon(icon, color: const Color(0xFFFF2A6D), size: 18),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-          ),
+          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
 
-  // 🌟 Bottom Sheet Trigger Box (Replaces inline dropdown)
-  Widget _buildBottomSheetTrigger({
-    required String label,
+  InputDecoration _inputDecoration({
     required String hint,
-    required String? value,
-    required VoidCallback onTap,
+    Widget? suffixIcon,
+    String? prefixText,
+    TextStyle? prefixStyle,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 6),
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF191924),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: value != null ? const Color(0xFFFF2A6D).withOpacity(0.4) : Colors.white.withOpacity(0.06),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    value ?? hint,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: value != null ? Colors.white : Colors.white30,
-                      fontSize: 13,
-                      fontWeight: value != null ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
-                ),
-                const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFFFF2A6D), size: 18),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        onPressed: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFD70F64).withOpacity(0.4),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(icon, color: Colors.white, size: 18),
-              ],
-            ),
-          ),
-        ),
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+      prefixText: prefixText,
+      prefixStyle: prefixStyle,
+      filled: true,
+      fillColor: const Color(0xFF1C1C28),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
       ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.primaryPink, width: 1.5),
+      ),
+      suffixIcon: suffixIcon,
     );
   }
 }

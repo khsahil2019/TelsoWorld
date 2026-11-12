@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 
@@ -41,7 +42,7 @@ class _WalletScreenState extends State<WalletScreen> {
       }
 
       final response = await http.get(
-        Uri.parse('https://telsoworld.com/api/reporter/wallet'),
+        Uri.parse('${ApiEndpoints.baseUrl}/reporter/wallet'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',

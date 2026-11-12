@@ -4,10 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
+import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:video_player/video_player.dart';
 
-const String _kApiHost = 'telsoworld.com';
+String get _kApiHost => ApiEndpoints.host;
 
 String _normalizeVideoUrl(String rawPath) {
   final trimmed = rawPath.trim();
@@ -25,7 +26,7 @@ String _normalizeVideoUrl(String rawPath) {
       (safePath.startsWith('/videos/') || safePath.startsWith('/ad-videos/'))) {
     safePath = '/storage$safePath';
   }
-  return Uri.https(_kApiHost, safePath).toString();
+  return 'http://$_kApiHost$safePath';
 }
 
 List<Uri> _videoUriCandidates(String rawUrl) {
@@ -190,7 +191,7 @@ class _AdsVideoScreenState extends State<AdsVideoScreen> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .get(
-            Uri.parse('https://telsoworld.com/api/reporter/ads-all-videos'),
+            Uri.parse('${ApiEndpoints.baseUrl}/reporter/ads-all-videos'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -408,7 +409,7 @@ class _AdsVideoPageState extends State<_AdsVideoPage>
       final token = await SessionTokenStore.getToken();
       await http
           .post(
-            Uri.parse('https://telsoworld.com/api/reporter/adsvideo/view'),
+            Uri.parse('${ApiEndpoints.baseUrl}/reporter/adsvideo/view'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -447,7 +448,7 @@ class _AdsVideoPageState extends State<_AdsVideoPage>
       final token = await SessionTokenStore.getToken();
       final response = await http
           .post(
-            Uri.parse('https://telsoworld.com/api/reporter/adsvideo/like'),
+            Uri.parse('${ApiEndpoints.baseUrl}/reporter/adsvideo/like'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -830,7 +831,7 @@ class _AdsCommentsBottomSheetState extends State<_AdsCommentsBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .post(
-            Uri.parse('https://telsoworld.com/api/comments'),
+            Uri.parse('${ApiEndpoints.baseUrl}/comments'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -891,7 +892,7 @@ class _AdsCommentsBottomSheetState extends State<_AdsCommentsBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .post(
-            Uri.parse('https://telsoworld.com/api/comments/add'),
+            Uri.parse('${ApiEndpoints.baseUrl}/comments/add'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -955,7 +956,7 @@ class _AdsCommentsBottomSheetState extends State<_AdsCommentsBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .post(
-            Uri.parse('https://telsoworld.com/api/comments/like'),
+            Uri.parse('${ApiEndpoints.baseUrl}/comments/like'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -1044,7 +1045,7 @@ class _AdsCommentsBottomSheetState extends State<_AdsCommentsBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .delete(
-            Uri.parse('https://telsoworld.com/api/comments/${comment.id}'),
+            Uri.parse('${ApiEndpoints.baseUrl}/comments/${comment.id}'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -1434,7 +1435,7 @@ class _AdsRepliesBottomSheetState extends State<_AdsRepliesBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .get(
-            Uri.parse('https://telsoworld.com/api/comments/${widget.commentId}/replies'),
+            Uri.parse('${ApiEndpoints.baseUrl}/comments/${widget.commentId}/replies'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',

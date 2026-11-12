@@ -1,14 +1,20 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/constants/app_colors.dart';
+import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
+import 'package:video_player/video_player.dart';
 
 class VideoEntry {
   final int id;
   final String subject;
   final String title;
   final String previewLabel;
+  final String videoUrl;
   final String uploadedAt;
-  final String status; // 'Pending' | 'Approved'
+  final String status; // 'Pending' | 'Approved' | 'Rejected'
   final String views;
   final int likes;
 
@@ -17,6 +23,7 @@ class VideoEntry {
     required this.subject,
     required this.title,
     required this.previewLabel,
+    this.videoUrl = '',
     required this.uploadedAt,
     required this.status,
     this.views = '1.2K',
@@ -34,6 +41,60 @@ class UploadedVideoScreen extends StatefulWidget {
 class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
   String _filter = 'All';
   String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMyVideos();
+  }
+
+  Future<void> _loadMyVideos() async {
+    try {
+      final token = await SessionTokenStore.getToken();
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/my-videos');
+      final res = await http.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['status'] == true && data['data'] is List) {
+          final list = (data['data'] as List).map<VideoEntry>((item) {
+            final rawUrl =
+                (item['video_url'] ?? item['video_path'] ?? item['url'] ?? '')
+                    .toString()
+                    .trim();
+            final resolvedUrl = rawUrl.startsWith('/')
+                ? 'http://${ApiEndpoints.host}$rawUrl'
+                : rawUrl;
+            return VideoEntry(
+              id: item['id'] is int ? item['id'] : int.tryParse(item['id'].toString()) ?? 0,
+              subject: item['subject']?.toString() ?? '',
+              title: item['title']?.toString() ?? 'Reel',
+              previewLabel: item['video_path']?.toString() ?? 'video.mp4',
+              videoUrl: resolvedUrl,
+              uploadedAt: item['created_at'] != null ? item['created_at'].toString() : 'Just now',
+              status: item['status']?.toString() ?? 'Approved',
+              views: (item['view_count'] ?? 0).toString(),
+              likes: (item['likes_count'] is int ? item['likes_count'] : 0),
+            );
+          }).toList();
+
+          if (mounted && list.isNotEmpty) {
+            setState(() {
+              _videos.clear();
+              _videos.addAll(list);
+            });
+          }
+        }
+      }
+    } catch (_) {
+    }
+  }
 
   final List<VideoEntry> _videos = [
     const VideoEntry(
@@ -173,7 +234,7 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF181822),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: TextField(
               style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -221,7 +282,7 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: AppColors.primaryPink.withOpacity(0.25)),
+        border: Border.all(color: AppColors.primaryPink.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,7 +295,7 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryPink.withOpacity(0.2),
+                      color: AppColors.primaryPink.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.auto_graph_rounded, color: AppColors.primaryPink, size: 18),
@@ -307,16 +368,32 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
     );
   }
 
+  void _openVideoPreview(VideoEntry video) {
+    if (video.videoUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Video stream URL is not available yet')),
+      );
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => _StudioVideoPreviewDialog(video: video),
+    );
+  }
+
   Widget _buildStudioVideoCard(VideoEntry video) {
     final bool isApproved = video.status == 'Approved';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+    return GestureDetector(
+      onTap: () => _openVideoPreview(video),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF161620),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,7 +422,7 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
+                        color: Colors.black.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text('0:45', style: TextStyle(color: Colors.white, fontSize: 9)),
@@ -377,8 +454,8 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: isApproved
-                            ? const Color(0xFF00E676).withOpacity(0.15)
-                            : const Color(0xFFFF9100).withOpacity(0.15),
+                            ? const Color(0xFF00E676).withValues(alpha: 0.15)
+                            : const Color(0xFFFF9100).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -419,6 +496,7 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -432,6 +510,210 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
           SizedBox(height: 12),
           Text('No videos found in this filter', style: TextStyle(color: Colors.white54, fontSize: 14)),
         ],
+      ),
+    );
+  }
+}
+
+class _StudioVideoPreviewDialog extends StatefulWidget {
+  final VideoEntry video;
+  const _StudioVideoPreviewDialog({required this.video});
+
+  @override
+  State<_StudioVideoPreviewDialog> createState() =>
+      _StudioVideoPreviewDialogState();
+}
+
+class _StudioVideoPreviewDialogState extends State<_StudioVideoPreviewDialog> {
+  VideoPlayerController? _controller;
+  bool _initialized = false;
+  bool _isMuted = false;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPlayer();
+  }
+
+  Future<void> _initPlayer() async {
+    try {
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.video.videoUrl),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+      );
+      _controller = controller;
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(1.0);
+      await controller.play();
+      if (!mounted) return;
+      setState(() => _initialized = true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorText = 'Could not load video: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() {
+    final c = _controller;
+    if (c == null || !_initialized) return;
+    setState(() {
+      if (c.value.isPlaying) {
+        c.pause();
+      } else {
+        c.play();
+      }
+    });
+  }
+
+  void _toggleMute() {
+    final c = _controller;
+    if (c == null) return;
+    final nextMuted = !_isMuted;
+    setState(() => _isMuted = nextMuted);
+    c.setVolume(nextMuted ? 0.0 : 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    return Dialog(
+      backgroundColor: const Color(0xFF14141D),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.video.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                height: 360,
+                color: Colors.black,
+                child: _errorText != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            _errorText!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                          ),
+                        ),
+                      )
+                    : !_initialized || c == null
+                        ? const Center(
+                            child: CircularProgressIndicator(color: Color(0xFFD70F64)),
+                          )
+                        : GestureDetector(
+                            onTap: _togglePlay,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Center(
+                                  child: AspectRatio(
+                                    aspectRatio: c.value.aspectRatio > 0
+                                        ? c.value.aspectRatio
+                                        : 9 / 16,
+                                    child: VideoPlayer(c),
+                                  ),
+                                ),
+                                if (!c.value.isPlaying)
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.play_arrow_rounded,
+                                      color: Colors.white,
+                                      size: 36,
+                                    ),
+                                  ),
+                                Positioned(
+                                  right: 10,
+                                  bottom: 14,
+                                  child: GestureDetector(
+                                    onTap: _toggleMute,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.white24),
+                                      ),
+                                      child: Icon(
+                                        _isMuted
+                                            ? Icons.volume_off_rounded
+                                            : Icons.volume_up_rounded,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: VideoProgressIndicator(
+                                    c,
+                                    allowScrubbing: true,
+                                    padding: EdgeInsets.zero,
+                                    colors: const VideoProgressColors(
+                                      playedColor: Color(0xFFD70F64),
+                                      bufferedColor: Colors.white24,
+                                      backgroundColor: Colors.white12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              widget.video.subject,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }

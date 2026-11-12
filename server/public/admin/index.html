@@ -1,0 +1,2282 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telso World — Admin Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              pink: '#FF2A6D',
+              purple: '#7928CA',
+              dark: '#0B0B10',
+              card: '#14141E',
+              border: '#232332',
+              input: '#1C1C28'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .glass {
+      background: rgba(20, 20, 30, 0.75);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: #0B0B10; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #232332; border-radius: 999px; }
+  </style>
+</head>
+<body class="bg-[#09090D] text-slate-100 min-h-screen flex antialiased">
+
+  <!-- 🔒 LOGIN OVERLAY (shown if not logged in) -->
+  <div id="loginModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md hidden">
+    <div class="bg-brand-card border border-brand-border rounded-2xl w-full max-w-md p-8 shadow-2xl relative">
+      <div class="flex items-center space-x-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-pink to-brand-purple flex items-center justify-center font-black text-white shadow-lg shadow-brand-pink/30">
+          TW
+        </div>
+        <div>
+          <h2 class="text-xl font-bold tracking-tight text-white">Telso World Admin</h2>
+          <p class="text-xs text-slate-400">Sign in to manage reels, creators & wallet</p>
+        </div>
+      </div>
+
+      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-6 flex items-start space-x-2 text-xs text-amber-200">
+        <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-amber-400"></i>
+        <span>Default credentials: <b>Username:</b> admin &bull; <b>Password:</b> admin123</span>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1.5">Username</label>
+          <input type="text" id="loginUsername" value="admin" required
+            class="w-full bg-brand-input border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-pink transition">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1.5">Password</label>
+          <input type="password" id="loginPassword" value="admin123" required
+            class="w-full bg-brand-input border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-pink transition">
+        </div>
+        <div id="loginError" class="text-xs text-rose-400 hidden"></div>
+        <button type="submit"
+          class="w-full bg-gradient-to-r from-brand-pink to-brand-purple text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-pink/25 hover:opacity-95 transition flex items-center justify-center space-x-2">
+          <span>Sign In to Dashboard</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 🧭 SIDEBAR -->
+  <aside class="w-64 border-r border-brand-border bg-brand-card/70 flex flex-col shrink-0">
+    <!-- Brand header -->
+    <div class="h-18 px-6 flex items-center space-x-3 border-b border-brand-border">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-pink to-brand-purple flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-brand-pink/30">
+        TW
+      </div>
+      <div>
+        <h1 class="font-extrabold text-sm tracking-wider text-white">TELSO WORLD</h1>
+        <p class="text-[10px] uppercase font-bold text-brand-pink tracking-widest">Admin Console</p>
+      </div>
+    </div>
+
+    <!-- Nav items -->
+    <nav class="flex-1 px-3 py-6 space-y-1">
+      <button onclick="switchTab('dashboard')" id="nav-dashboard"
+        class="nav-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-pink/15 text-brand-pink transition">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+        <span>Dashboard</span>
+      </button>
+      <button onclick="switchTab('approval')" id="nav-approval"
+        class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition">
+        <div class="flex items-center space-x-3">
+          <i data-lucide="shield-check" class="w-4 h-4 text-amber-400"></i>
+          <span>Approval Queue</span>
+        </div>
+        <span id="navApprovalBadge" class="bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full hidden">0</span>
+      </button>
+      <button onclick="switchTab('videos')" id="nav-videos"
+        class="nav-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition">
+        <i data-lucide="video" class="w-4 h-4"></i>
+        <span>Reels & Videos</span>
+      </button>
+      <button onclick="switchTab('users')" id="nav-users"
+        class="nav-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition">
+        <i data-lucide="users" class="w-4 h-4"></i>
+        <span>Creators & Users</span>
+      </button>
+      <button onclick="switchTab('comments')" id="nav-comments"
+        class="nav-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition">
+        <i data-lucide="message-square" class="w-4 h-4"></i>
+        <span>Comments</span>
+      </button>
+      <button onclick="switchTab('settings')" id="nav-settings"
+        class="nav-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition">
+        <i data-lucide="sliders" class="w-4 h-4 text-emerald-400"></i>
+        <span>Servers & Settings</span>
+      </button>
+      <button onclick="switchTab('birthdays')" id="nav-birthdays"
+        class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition">
+        <div class="flex items-center space-x-3">
+          <i data-lucide="cake" class="w-4 h-4 text-pink-400"></i>
+          <span>Birthday Center</span>
+        </div>
+        <span id="navBirthdayBadge" class="bg-pink-500/20 border border-pink-500/30 text-pink-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full hidden">0</span>
+      </button>
+      <button onclick="switchTab('system')" id="nav-system"
+        class="nav-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition">
+        <i data-lucide="radio" class="w-4 h-4 text-cyan-400"></i>
+        <span>API & Connect</span>
+      </button>
+    </nav>
+
+    <!-- Bottom User info -->
+    <div class="p-4 border-t border-brand-border bg-black/20 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 rounded-full bg-brand-purple/40 border border-brand-purple flex items-center justify-center text-xs font-bold text-white">
+          AD
+        </div>
+        <div>
+          <p class="text-xs font-bold text-white">Admin</p>
+          <p class="text-[10px] text-emerald-400 flex items-center">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block mr-1"></span> Online
+          </p>
+        </div>
+      </div>
+      <button onclick="logoutAdmin()" title="Logout" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- 🖥️ MAIN CONTENT AREA -->
+  <main class="flex-1 flex flex-col h-screen overflow-hidden">
+    <!-- Top Bar -->
+    <header class="h-18 px-8 border-b border-brand-border bg-brand-card/40 flex items-center justify-between shrink-0">
+      <div>
+        <h2 id="pageTitle" class="text-lg font-bold text-white">Dashboard Overview</h2>
+        <p id="pageSubtitle" class="text-xs text-slate-400">Live platform analytics, active reels and server metrics</p>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <!-- Quick server pill -->
+        <div class="hidden sm:flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/25 px-3 py-1.5 rounded-full text-xs text-emerald-300">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Server Active &bull; Port 5050</span>
+        </div>
+        <button onclick="openUploadModal()"
+          class="bg-gradient-to-r from-brand-pink to-brand-purple text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md shadow-brand-pink/25 hover:opacity-95 transition flex items-center space-x-2">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Upload Reel</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Scrollable tab container -->
+    <div class="flex-1 overflow-y-auto p-8 scrollbar-thin space-y-8">
+
+      <!-- ======================================================== -->
+      <!-- TAB 1: DASHBOARD -->
+      <!-- ======================================================== -->
+      <section id="tab-dashboard" class="space-y-8">
+        <!-- Approval Banner if pending videos exist -->
+        <div id="dashboardApprovalAlert" class="hidden bg-gradient-to-r from-amber-500/20 via-brand-card to-brand-card border border-amber-500/40 rounded-2xl p-4 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center">
+              <i data-lucide="shield-alert" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-white"><span id="alertPendingCount">0</span> Reel(s) Waiting For Admin Approval</p>
+              <p class="text-xs text-slate-400">Creators have uploaded new reels. Approve them to push them live to the mobile app & website feed.</p>
+            </div>
+          </div>
+          <button onclick="switchTab('approval')" class="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-4 py-2 rounded-xl transition flex items-center space-x-1.5 shadow-md shadow-amber-500/20">
+            <span>Open Approval Queue</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- KPI Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <!-- Card 1: Creators -->
+          <div class="bg-brand-card border border-brand-border rounded-2xl p-5 relative overflow-hidden">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Creators</p>
+                <h3 id="statTotalUsers" class="text-2xl font-extrabold text-white mt-1">0</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                <i data-lucide="users" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center text-xs text-slate-400">
+              <span class="text-emerald-400 font-bold mr-1.5 flex items-center">
+                <i data-lucide="trending-up" class="w-3.5 h-3.5 mr-0.5"></i> Active
+              </span>
+              <span>Registered musicians</span>
+            </div>
+          </div>
+
+          <!-- Card 2: Approved Reels -->
+          <div class="bg-brand-card border border-brand-border rounded-2xl p-5 relative overflow-hidden">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Live Reels</p>
+                <h3 id="statTotalVideos" class="text-2xl font-extrabold text-white mt-1">0</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-brand-pink/15 text-brand-pink border border-brand-pink/20">
+                <i data-lucide="film" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center space-x-2 text-xs">
+              <span id="statNormalVideos" class="bg-white/5 px-2 py-0.5 rounded text-slate-300">0 Normal</span>
+              <span id="statAdsVideos" class="bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded">0 Ads</span>
+            </div>
+          </div>
+
+          <!-- Card 3: Pending Approvals (Crucial!) -->
+          <div onclick="switchTab('approval')" class="bg-amber-500/10 border border-amber-500/30 hover:border-amber-500/60 rounded-2xl p-5 relative overflow-hidden cursor-pointer transition group">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-bold text-amber-300 uppercase tracking-wider">Pending Approvals</p>
+                <h3 id="statPendingVideos" class="text-2xl font-extrabold text-white mt-1">0</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 group-hover:scale-110 transition">
+                <i data-lucide="shield-alert" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center text-xs text-amber-300 font-semibold group-hover:underline">
+              <span>Review & approve reels &rarr;</span>
+            </div>
+          </div>
+
+          <!-- Card 4: Views -->
+          <div class="bg-brand-card border border-brand-border rounded-2xl p-5 relative overflow-hidden">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reel Views</p>
+                <h3 id="statTotalViews" class="text-2xl font-extrabold text-white mt-1">0</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                <i data-lucide="eye" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center text-xs text-slate-400">
+              <span class="text-emerald-400 font-bold mr-1.5 flex items-center">
+                <i data-lucide="activity" class="w-3.5 h-3.5 mr-0.5"></i> Engaged
+              </span>
+              <span>Total audience views</span>
+            </div>
+          </div>
+
+          <!-- Card 5: Birthdays Today -->
+          <div class="bg-pink-500/10 border border-pink-500/25 rounded-2xl p-5 relative overflow-hidden">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-bold text-pink-300 uppercase tracking-wider">Today's Birthdays</p>
+                <h3 id="statTodayBirthdays" class="text-2xl font-extrabold text-white mt-1">0</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                <span class="text-lg">🎂</span>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center text-xs text-pink-300 font-medium">
+              <span>Creator wishes ready</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2-Column Section: Recent Reels & Birthdays Widget -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Recent Reels Feed Preview (2 Cols) -->
+          <div class="lg:col-span-2 bg-brand-card border border-brand-border rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-5">
+              <div>
+                <h3 class="font-bold text-base text-white">Recent Reels in Rotation</h3>
+                <p class="text-xs text-slate-400">Currently active on user feed and explorer</p>
+              </div>
+              <button onclick="switchTab('videos')" class="text-xs font-bold text-brand-pink hover:underline">
+                View All Reels &rarr;
+              </button>
+            </div>
+            <div id="recentVideosTable" class="overflow-x-auto">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- 🎂 Today's Birthdays / Wishes Card (1 Col) -->
+          <div class="bg-gradient-to-b from-[#181826] to-brand-card border border-brand-border rounded-2xl p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-brand-border">
+              <div class="flex items-center space-x-2.5">
+                <div class="w-9 h-9 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center text-lg">
+                  🎂
+                </div>
+                <div>
+                  <h3 class="font-bold text-sm text-white">Today's Birthdays</h3>
+                  <p class="text-[11px] text-slate-400">Creator celebration system</p>
+                </div>
+              </div>
+              <span id="birthdaysCountBadge" class="bg-pink-500/20 text-pink-300 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">0 Today</span>
+            </div>
+
+            <div id="birthdaysContainer" class="flex-1 space-y-3">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- TAB: APPROVAL QUEUE -->
+      <!-- ======================================================== -->
+      <section id="tab-approval" class="space-y-6 hidden">
+        <div class="bg-gradient-to-r from-amber-500/10 via-brand-card to-brand-card border border-amber-500/30 rounded-2xl p-6 flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+              <i data-lucide="shield-alert" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-extrabold text-white flex items-center space-x-2.5">
+                <span>Reels Moderation & Approval Queue</span>
+                <span id="approvalCountBadge" class="bg-amber-500 text-black text-xs font-black px-2.5 py-0.5 rounded-full">0 Pending</span>
+              </h3>
+              <p class="text-xs text-slate-400">All user-uploaded reels land here. Once approved, they immediately appear on the public feed and user dashboard.</p>
+            </div>
+          </div>
+          <button onclick="loadApprovals()" class="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-4 py-2 rounded-xl transition flex items-center space-x-2">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Refresh Queue</span>
+          </button>
+        </div>
+
+        <!-- Approval Table / Cards Container -->
+        <div class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+          <div id="approvalsContainer" class="p-6">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- TAB 2: VIDEOS & REELS MANAGEMENT -->
+      <!-- ======================================================== -->
+      <section id="tab-videos" class="space-y-6 hidden">
+        <!-- Controls & Filters -->
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center space-x-3 flex-1 min-w-[240px]">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+              <input type="text" id="videoSearchInput" onkeyup="filterVideos()" placeholder="Search by title, subject, or creator..."
+                class="w-full bg-brand-input border border-brand-border rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-brand-pink transition">
+            </div>
+            <select id="videoTypeFilter" onchange="loadVideos()"
+              class="bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
+              <option value="all">All Types</option>
+              <option value="normal">Normal Feed</option>
+              <option value="ads">Ad / Promotion</option>
+            </select>
+            <select id="videoStatusFilter" onchange="loadVideos()"
+              class="bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
+              <option value="all">All Status</option>
+              <option value="Approved">Approved</option>
+              <option value="Pending">Pending</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+          <button onclick="openUploadModal()"
+            class="bg-gradient-to-r from-brand-pink to-brand-purple text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:opacity-95 transition flex items-center space-x-2">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Add New Reel</span>
+          </button>
+        </div>
+
+        <!-- Videos Table -->
+        <div class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+          <div id="videosTableContainer" class="overflow-x-auto">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- TAB 3: CREATORS & USERS MANAGEMENT -->
+      <!-- ======================================================== -->
+      <section id="tab-users" class="space-y-6 hidden">
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-4 flex items-center justify-between">
+          <div class="relative w-80">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+            <input type="text" id="userSearchInput" onkeyup="filterUsers()" placeholder="Search creator by name, username, mobile..."
+              class="w-full bg-brand-input border border-brand-border rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-brand-pink transition">
+          </div>
+        </div>
+
+        <div class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+          <div id="usersTableContainer" class="overflow-x-auto">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- TAB 4: COMMENTS MODERATION -->
+      <!-- ======================================================== -->
+      <section id="tab-comments" class="space-y-6 hidden">
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-6">
+          <h3 class="font-bold text-base text-white mb-1">Platform Comments Moderation</h3>
+          <p class="text-xs text-slate-400 mb-6">Review all user comments, replies, and remove spam or abusive content</p>
+          <div id="commentsTableContainer" class="overflow-x-auto">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- TAB 5: PLATFORM SERVERS & INTEGRATIONS CONFIG -->
+      <!-- ======================================================== -->
+      <section id="tab-settings" class="space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center space-x-2">
+              <i data-lucide="sliders" class="w-5 h-5 text-emerald-400"></i>
+              <span>Platform Servers & Integrations Management</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Configure live SMS gateways, Gmail SMTP email, Firebase FCM push notifications, and monetization rules</p>
+          </div>
+          <button onclick="saveAllSettings()" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-2 shadow-lg shadow-emerald-500/20 transition">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            <span>Save All Configurations</span>
+          </button>
+        </div>
+
+        <div id="settingsAlertBox" class="hidden p-3 rounded-xl text-xs font-semibold"></div>
+
+        <!-- 2x2 Grid of Configuration Cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- 1. 📱 SMS GATEWAY CONFIGURATION -->
+          <div class="bg-brand-card border border-brand-border rounded-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-brand-border/80 pb-3">
+              <div class="flex items-center space-x-2.5">
+                <div class="p-2 bg-emerald-500/15 text-emerald-400 rounded-xl">
+                  <i data-lucide="message-square" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-sm text-white">SMS Gateway / Server</h4>
+                  <p class="text-[11px] text-slate-400">Phone verification OTPs & alerts</p>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="smsIsActive" class="sr-only peer" checked>
+                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+              </label>
+            </div>
+
+            <div class="space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Provider</label>
+                  <select id="smsProvider" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+                    <option value="fast2sms">Fast2SMS (India)</option>
+                    <option value="twilio">Twilio (Global)</option>
+                    <option value="msg91">MSG91</option>
+                    <option value="textlocal">Textlocal</option>
+                    <option value="mock">Dev Simulator (Local)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Sender ID / From</label>
+                  <input type="text" id="smsSenderId" value="TELSOO" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">API Key / Auth Token</label>
+                <input type="password" id="smsApiKey" value="FST_LIVE_998124810239102" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+              </div>
+
+              <div id="twilioFields" class="grid grid-cols-2 gap-3 hidden">
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Twilio Account SID</label>
+                  <input type="text" id="smsTwilioSid" value="AC_telso_world_prod_sid" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Twilio Phone Number</label>
+                  <input type="text" id="smsTwilioPhone" value="+12058801234" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">OTP SMS Template</label>
+                <textarea id="smsTemplate" rows="2" class="w-full bg-brand-input border border-brand-border rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-400">Your Telso World creator verification OTP is {OTP}. Valid for 10 minutes. Do not share with anyone.</textarea>
+                <p class="text-[10px] text-slate-500 mt-1">Use <code>{OTP}</code> to dynamically interpolate the 6-digit verification code.</p>
+              </div>
+
+              <!-- Live Test SMS Box -->
+              <div class="bg-black/30 border border-brand-border/80 rounded-xl p-3.5 space-y-2 mt-2">
+                <span class="text-[11px] font-bold text-emerald-400 flex items-center">
+                  <i data-lucide="zap" class="w-3.5 h-3.5 mr-1"></i> Quick Test SMS Dispatcher
+                </span>
+                <div class="flex items-center space-x-2">
+                  <input type="text" id="testSmsNumber" value="9876543210" placeholder="Recipient 10-digit mobile"
+                    class="flex-1 bg-brand-input border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400">
+                  <button type="button" onclick="dispatchTestSms()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition shrink-0">
+                    Send Test SMS
+                  </button>
+                </div>
+                <div id="testSmsResult" class="hidden text-[11px] p-2 rounded-lg bg-black/50 border border-emerald-500/30 text-emerald-300 font-mono"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 📧 GMAIL / SMTP MAIL SERVER CONFIGURATION -->
+          <div class="bg-brand-card border border-brand-border rounded-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-brand-border/80 pb-3">
+              <div class="flex items-center space-x-2.5">
+                <div class="p-2 bg-rose-500/15 text-rose-400 rounded-xl">
+                  <i data-lucide="mail" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-sm text-white">Gmail / SMTP Server</h4>
+                  <p class="text-[11px] text-slate-400">Creator welcome emails & OTP</p>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="smtpIsActive" class="sr-only peer" checked>
+                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+              </label>
+            </div>
+
+            <div class="space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Mail Service</label>
+                  <select id="smtpProvider" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-400">
+                    <option value="gmail">Google Gmail (smtp.gmail.com)</option>
+                    <option value="custom_smtp">Custom SMTP Server</option>
+                    <option value="sendgrid">SendGrid API</option>
+                    <option value="ses">Amazon SES</option>
+                    <option value="mock">Dev Simulator (Local)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Host & Port</label>
+                  <div class="flex items-center space-x-1.5">
+                    <input type="text" id="smtpHost" value="smtp.gmail.com" class="w-2/3 bg-brand-input border border-brand-border rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-rose-400">
+                    <input type="number" id="smtpPort" value="587" class="w-1/3 bg-brand-input border border-brand-border rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-rose-400">
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Gmail / Username</label>
+                  <input type="email" id="smtpUsername" value="noreply.telsoworld@gmail.com" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-400">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Google App Password</label>
+                  <input type="password" id="smtpPassword" value="gapp-xxxx-yyyy-zzzz" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-400">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Sender Display Name</label>
+                  <input type="text" id="smtpFromName" value="Telso World Official" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-400">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Sender Email</label>
+                  <input type="email" id="smtpFromEmail" value="noreply@telsoworld.com" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-400">
+                </div>
+              </div>
+
+              <!-- Live Test Email Box -->
+              <div class="bg-black/30 border border-brand-border/80 rounded-xl p-3.5 space-y-2 mt-2">
+                <span class="text-[11px] font-bold text-rose-400 flex items-center">
+                  <i data-lucide="send" class="w-3.5 h-3.5 mr-1"></i> Quick Test Email Dispatcher
+                </span>
+                <div class="flex items-center space-x-2">
+                  <input type="email" id="testEmailAddress" value="aarav@telsoworld.com" placeholder="Recipient email address"
+                    class="flex-1 bg-brand-input border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-rose-400">
+                  <button type="button" onclick="dispatchTestEmail()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition shrink-0">
+                    Send Test Email
+                  </button>
+                </div>
+                <div id="testEmailResult" class="hidden text-[11px] p-2 rounded-lg bg-black/50 border border-rose-500/30 text-rose-300 font-mono"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. 🔔 FIREBASE FCM & BROADCAST NOTIFICATIONS -->
+          <div class="bg-brand-card border border-brand-border rounded-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-brand-border/80 pb-3">
+              <div class="flex items-center space-x-2.5">
+                <div class="p-2 bg-amber-500/15 text-amber-400 rounded-xl">
+                  <i data-lucide="bell" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-sm text-white">Firebase & Push Notifications</h4>
+                  <p class="text-[11px] text-slate-400">FCM Cloud Messaging & alerts</p>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="firebaseIsActive" class="sr-only peer" checked>
+                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+
+            <div class="space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Firebase Project ID</label>
+                  <input type="text" id="firebaseProjectId" value="telso-world-official" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Channel ID</label>
+                  <input type="text" id="firebaseChannelId" value="telso_broadcast_channel" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">FCM Server Key / Legacy Token</label>
+                <input type="password" id="firebaseServerKey" value="AAAA_TELSO_FCM_SERVER_KEY:APA91bF-live-production-token" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400">
+              </div>
+
+              <!-- Live Broadcast Push Notification Tool -->
+              <div class="bg-black/30 border border-brand-border/80 rounded-xl p-3.5 space-y-2 mt-2">
+                <span class="text-[11px] font-bold text-amber-400 flex items-center">
+                  <i data-lucide="radio" class="w-3.5 h-3.5 mr-1"></i> Live Broadcast Push Notification
+                </span>
+                <div class="space-y-2">
+                  <div class="grid grid-cols-3 gap-2">
+                    <select id="broadcastAudience" class="col-span-1 bg-brand-input border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400">
+                      <option value="all">All Creators</option>
+                      <option value="musicians">Musicians Only</option>
+                      <option value="trending">Active This Week</option>
+                    </select>
+                    <input type="text" id="broadcastTitle" placeholder="Notification Title (e.g. 🔥 Trending Reel!)"
+                      class="col-span-2 bg-brand-input border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400">
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <input type="text" id="broadcastBody" placeholder="Message content for creators..."
+                      class="flex-1 bg-brand-input border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400">
+                    <button type="button" onclick="dispatchBroadcastNotification()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition shrink-0">
+                      Broadcast Push 🚀
+                    </button>
+                  </div>
+                </div>
+                <div id="broadcastResult" class="hidden text-[11px] p-2 rounded-lg bg-black/50 border border-amber-500/30 text-amber-300 font-mono"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. 💰 PLATFORM MONETIZATION & BUSINESS RULES -->
+          <div class="bg-brand-card border border-brand-border rounded-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-brand-border/80 pb-3">
+              <div class="flex items-center space-x-2.5">
+                <div class="p-2 bg-purple-500/15 text-purple-400 rounded-xl">
+                  <i data-lucide="coins" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-sm text-white">Platform Rules & Monetization</h4>
+                  <p class="text-[11px] text-slate-400">Wallet rewards, approvals & birthday engine</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Welcome Bonus (₹)</label>
+                  <input type="number" id="ruleWelcomeBonus" value="50.00" step="10" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Referral Reward (₹)</label>
+                  <input type="number" id="ruleReferralReward" value="50.00" step="10" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold uppercase text-slate-400 mb-1">Min Withdrawal (₹)</label>
+                  <input type="number" id="ruleMinWithdrawal" value="100.00" step="50" class="w-full bg-brand-input border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400">
+                </div>
+              </div>
+
+              <!-- Max Video Upload Size -->
+              <div class="p-3 bg-brand-input/70 border border-brand-border rounded-xl flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-bold text-white">Max Video Upload Size Limit (MB)</p>
+                  <p class="text-[10px] text-slate-400">Enforces maximum file size limit for video reel uploads across web & mobile</p>
+                </div>
+                <div class="w-32">
+                  <input type="number" id="ruleMaxUploadSize" value="250" min="10" max="2000" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white text-right font-mono focus:outline-none focus:border-purple-400">
+                </div>
+              </div>
+
+              <!-- Moderation Mode -->
+              <div class="p-3 bg-brand-input/70 border border-brand-border rounded-xl flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-bold text-white">Require Admin Video Approval</p>
+                  <p class="text-[10px] text-slate-400">When enabled, newly uploaded reels go to Approval Queue before appearing on website front</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="ruleRequireApproval" class="sr-only peer" checked>
+                  <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-500"></div>
+                </label>
+              </div>
+
+              <!-- Birthday Wishing System -->
+              <div class="p-3 bg-brand-input/70 border border-brand-border rounded-xl flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-bold text-white">Birthday Celebration & Auto-Wish Engine</p>
+                  <p class="text-[10px] text-slate-400">Automatically surfaces celebrating creators, triggers special banners and ₹50 birthday gifts</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="ruleBirthdayWishing" class="sr-only peer" checked>
+                  <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-500"></div>
+                </label>
+              </div>
+
+              <div class="pt-2">
+                <button type="button" onclick="saveAllSettings()" class="w-full bg-brand-pink/20 hover:bg-brand-pink/30 text-brand-pink border border-brand-pink/30 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center space-x-2">
+                  <i data-lucide="check" class="w-4 h-4"></i>
+                  <span>Save Platform & Monetization Rules</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- TAB 6: BIRTHDAY CELEBRATION COMMAND CENTER -->
+      <!-- ======================================================== -->
+      <section id="tab-birthdays" class="space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center space-x-2">
+              <span class="text-xl">🎂</span>
+              <span>Creator Birthday Celebration Center</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Celebrate your artists on their special day, wish them via WhatsApp or SMS, and credit birthday bonuses</p>
+          </div>
+          <button onclick="loadBirthdayCenter()" class="bg-white/10 hover:bg-white/15 text-slate-200 text-xs px-3.5 py-2 rounded-xl flex items-center space-x-2 transition">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Refresh Birthdays</span>
+          </button>
+        </div>
+
+        <div id="birthdayCenterAlert" class="hidden p-3 rounded-xl text-xs font-semibold"></div>
+
+        <!-- Today's Celebrating Creators -->
+        <div class="bg-gradient-to-r from-pink-950/30 to-purple-950/30 border border-pink-500/30 rounded-2xl p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="text-2xl animate-bounce">🎉</span>
+              <h4 class="font-bold text-sm text-pink-300">Celebrating Birthday Today</h4>
+            </div>
+            <span id="centerTodayCountBadge" class="bg-pink-500/20 text-pink-300 border border-pink-500/30 text-xs font-bold px-3 py-1 rounded-full">
+              Loading...
+            </span>
+          </div>
+
+          <div id="centerTodayBirthdaysContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Upcoming Birthdays (Next 30 Days) -->
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-white flex items-center space-x-2">
+              <i data-lucide="calendar" class="w-4 h-4 text-purple-400"></i>
+              <span>Upcoming Creator Birthdays (Next 30 Days)</span>
+            </h4>
+            <span id="centerUpcomingCountBadge" class="text-xs text-slate-400 font-medium">0 upcoming</span>
+          </div>
+
+          <div id="centerUpcomingTableContainer" class="overflow-x-auto">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- TAB 5: API & SYSTEM CONFIGURATION -->
+      <!-- ======================================================== -->
+      <section id="tab-system" class="space-y-6 hidden">
+        <!-- Live Connection Helper -->
+        <div class="bg-gradient-to-r from-brand-card to-[#191928] border border-brand-border rounded-2xl p-6 space-y-4">
+          <div class="flex items-center space-x-3">
+            <div class="p-2 rounded-xl bg-brand-pink/20 text-brand-pink">
+              <i data-lucide="smartphone" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-base text-white">Flutter Mobile App Connection Endpoints</h3>
+              <p class="text-xs text-slate-400">Copy these URLs into your Flutter app's <code>ApiEndpoints.baseUrl</code></p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <!-- 1. Android Emulator -->
+            <div class="bg-brand-input/70 border border-brand-border rounded-xl p-4 space-y-2">
+              <span class="text-[11px] font-bold uppercase text-emerald-400 flex items-center">
+                <i data-lucide="bot" class="w-3.5 h-3.5 mr-1"></i> Android Studio Emulator
+              </span>
+              <div class="flex items-center justify-between bg-black/40 rounded-lg p-2 font-mono text-xs text-slate-200">
+                <span id="urlAndroidEmu">http://10.0.2.2:5050/api</span>
+                <button onclick="copyToClipboard('http://10.0.2.2:5050/api')" class="text-brand-pink hover:text-white transition">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400">Android emulator routes host machine loopback through 10.0.2.2</p>
+            </div>
+
+            <!-- 2. iOS Simulator & Web -->
+            <div class="bg-brand-input/70 border border-brand-border rounded-xl p-4 space-y-2">
+              <span class="text-[11px] font-bold uppercase text-sky-400 flex items-center">
+                <i data-lucide="apple" class="w-3.5 h-3.5 mr-1"></i> iOS Simulator & Web
+              </span>
+              <div class="flex items-center justify-between bg-black/40 rounded-lg p-2 font-mono text-xs text-slate-200">
+                <span id="urlLocalhost">http://localhost:5050/api</span>
+                <button onclick="copyToClipboard('http://localhost:5050/api')" class="text-brand-pink hover:text-white transition">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400">Direct localhost connection for Mac & iOS Simulator</p>
+            </div>
+
+            <!-- 3. Physical Devices (LAN) -->
+            <div class="bg-brand-input/70 border border-brand-border rounded-xl p-4 space-y-2">
+              <span class="text-[11px] font-bold uppercase text-purple-400 flex items-center">
+                <i data-lucide="wifi" class="w-3.5 h-3.5 mr-1"></i> Physical Phone (Wi-Fi)
+              </span>
+              <div class="flex items-center justify-between bg-black/40 rounded-lg p-2 font-mono text-xs text-slate-200">
+                <span id="urlPhysicalLan">Loading...</span>
+                <button id="btnCopyLan" onclick="copyLanUrl()" class="text-brand-pink hover:text-white transition">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400">Make sure your phone and Mac are on the same Wi-Fi network</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- API Health & Endpoints list -->
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="font-bold text-sm text-white">Active API Endpoints Directory</h4>
+            <button onclick="testApiHealth()" class="text-xs bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-lg text-slate-200 transition">
+              Test /api/health
+            </button>
+          </div>
+          <div class="space-y-2 font-mono text-xs">
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-emerald-400 font-bold">GET</span>
+              <span class="text-slate-300">/api/reporter/dashboard</span>
+              <span class="text-slate-500 font-sans text-[11px]">Primary Home Feed reels with like status</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-emerald-400 font-bold">GET</span>
+              <span class="text-slate-300">/api/reporter/ads-all-videos</span>
+              <span class="text-slate-500 font-sans text-[11px]">Promotional / Ads reels</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-blue-400 font-bold">POST</span>
+              <span class="text-slate-300">/api/reporter/register</span>
+              <span class="text-slate-500 font-sans text-[11px]">Musician registration 3-step wizard</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-blue-400 font-bold">POST</span>
+              <span class="text-slate-300">/api/reporter/login</span>
+              <span class="text-slate-500 font-sans text-[11px]">Creator auth & JWT generation</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-blue-400 font-bold">POST</span>
+              <span class="text-slate-300">/api/reporter/upload-video</span>
+              <span class="text-slate-500 font-sans text-[11px]">Multipart video & thumbnail upload</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-blue-400 font-bold">POST</span>
+              <span class="text-slate-300">/api/reporter/normal-video/like</span>
+              <span class="text-slate-500 font-sans text-[11px]">Toggle reel like</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-emerald-400 font-bold">GET</span>
+              <span class="text-slate-300">/api/comments?video_id=:id</span>
+              <span class="text-slate-500 font-sans text-[11px]">Fetch comments for video</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-emerald-400 font-bold">GET</span>
+              <span class="text-slate-300">/api/reporter/wallet</span>
+              <span class="text-slate-500 font-sans text-[11px]">Creator balance & transactions</span>
+            </div>
+            <div class="flex items-center justify-between p-2.5 bg-brand-input/50 rounded-xl">
+              <span class="text-emerald-400 font-bold">GET</span>
+              <span class="text-slate-300">/api/reporter/referral</span>
+              <span class="text-slate-500 font-sans text-[11px]">Referral stats & unique invite link</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- 🎥 VIDEO PLAYER MODAL -->
+  <div id="videoModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md hidden p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative">
+      <div class="flex items-center justify-between p-4 border-b border-brand-border">
+        <h4 id="videoModalTitle" class="font-bold text-sm text-white truncate max-w-xs">Video Preview</h4>
+        <button onclick="closeVideoModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="relative bg-black aspect-[9/16] max-h-[70vh] flex items-center justify-center">
+        <video id="videoPlayer" controls autoplay class="w-full h-full object-contain"></video>
+      </div>
+      <div class="p-4 bg-brand-input/40 flex items-center justify-between text-xs text-slate-300">
+        <span id="videoModalSubject" class="truncate max-w-sm"></span>
+        <span id="videoModalType" class="px-2 py-0.5 rounded bg-brand-pink/20 text-brand-pink font-bold">Normal</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ➕ UPLOAD / ADD VIDEO MODAL -->
+  <div id="uploadModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md hidden p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-base text-white">Add New Reel to Telso World</h3>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="uploadVideoForm" onsubmit="handleUploadSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Title / Caption</label>
+          <input type="text" id="uploadTitle" required placeholder="e.g. Stage Acoustic Live Cover"
+            class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-brand-pink">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Description / Hashtags</label>
+          <input type="text" id="uploadSubject" placeholder="e.g. Classical fusion solo track 🔥 #music #viral"
+            class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-brand-pink">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Category</label>
+            <input type="text" id="uploadCategory" value="Music"
+              class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-brand-pink">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Video Type</label>
+            <select id="uploadType" class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none">
+              <option value="normal">Normal Reel (Home Feed)</option>
+              <option value="ads">Ad / Promotion</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Upload Video File (.mp4 / .mov)</label>
+          <input type="file" id="uploadFile" accept="video/*"
+            class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-pink/20 file:text-brand-pink hover:file:bg-brand-pink/30">
+          <p class="text-[10px] text-slate-500 mt-1">Or paste direct video URL below:</p>
+        </div>
+        <div>
+          <input type="url" id="uploadUrl" placeholder="https://example.com/reel.mp4"
+            class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-brand-pink">
+        </div>
+
+        <div id="uploadStatusMsg" class="text-xs hidden"></div>
+
+        <div class="flex justify-end space-x-3 pt-2">
+          <button type="button" onclick="closeUploadModal()" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancel</button>
+          <button type="submit" id="btnUploadSubmit"
+            class="bg-gradient-to-r from-brand-pink to-brand-purple text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow hover:opacity-95 transition">
+            Publish Reel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 💳 WALLET ADJUSTMENT MODAL -->
+  <div id="walletModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md hidden p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-sm w-full p-6 shadow-2xl relative">
+      <h3 class="font-bold text-base text-white mb-1">Adjust Creator Wallet</h3>
+      <p id="walletModalSubtitle" class="text-xs text-slate-400 mb-4"></p>
+
+      <form id="walletForm" onsubmit="handleWalletSubmit(event)" class="space-y-4">
+        <input type="hidden" id="walletUserId">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Action</label>
+          <select id="walletType" class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none">
+            <option value="credit">Credit (Add Money)</option>
+            <option value="debit">Debit (Deduct Money)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Amount (₹)</label>
+          <input type="number" id="walletAmount" required min="1" step="0.5" placeholder="50.00"
+            class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-brand-pink">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Reason / Note</label>
+          <input type="text" id="walletNote" placeholder="e.g. Creator Performance Bonus"
+            class="w-full bg-brand-input border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-brand-pink">
+        </div>
+        <div class="flex justify-end space-x-3 pt-2">
+          <button type="button" onclick="closeWalletModal()" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancel</button>
+          <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition">
+            Apply Balance
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT APP LOGIC -->
+  <script>
+    let adminToken = localStorage.getItem('telso_admin_token');
+    let allVideos = [];
+    let allUsers = [];
+
+    // Initialize on load
+    function initAdmin() {
+      if (window.lucide) lucide.createIcons();
+      if (!adminToken) {
+        document.getElementById('loginModal').classList.remove('hidden');
+      } else {
+        loadDashboard();
+      }
+      loadSystemInfo();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initAdmin);
+    } else {
+      initAdmin();
+    }
+
+    // Login handler
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const u = document.getElementById('loginUsername').value.trim();
+      const p = document.getElementById('loginPassword').value.trim();
+      const errBox = document.getElementById('loginError');
+
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p }),
+        });
+        const data = await res.json();
+        if (data.status && data.token) {
+          adminToken = data.token;
+          localStorage.setItem('telso_admin_token', adminToken);
+          document.getElementById('loginModal').classList.add('hidden');
+          loadDashboard();
+        } else {
+          errBox.textContent = data.message || 'Invalid login';
+          errBox.classList.remove('hidden');
+        }
+      } catch (err) {
+        errBox.textContent = 'Server connection error';
+        errBox.classList.remove('hidden');
+      }
+    });
+
+    function logoutAdmin() {
+      localStorage.removeItem('telso_admin_token');
+      adminToken = null;
+      document.getElementById('loginModal').classList.remove('hidden');
+    }
+
+    function authHeaders() {
+      return {
+        'Authorization': `Bearer ${adminToken}`,
+        'Accept': 'application/json'
+      };
+    }
+
+    // Switch Tabs
+    function switchTab(tabId) {
+      document.querySelectorAll('main > div > section').forEach(sec => sec.classList.add('hidden'));
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-brand-pink/15', 'text-brand-pink');
+        btn.classList.add('text-slate-400');
+      });
+
+      const target = document.getElementById(`tab-${tabId}`);
+      if (target) target.classList.remove('hidden');
+
+      const navBtn = document.getElementById(`nav-${tabId}`);
+      if (navBtn) {
+        navBtn.classList.add('bg-brand-pink/15', 'text-brand-pink');
+        navBtn.classList.remove('text-slate-400');
+      }
+
+      // Title
+      const titles = {
+        dashboard: ['Dashboard Overview', 'Live platform analytics, active reels and server metrics'],
+        approval: ['Reels Approval Queue', 'Review pending video uploads and push them live to the public feed'],
+        videos: ['Reels & Videos Management', 'Review, moderate, approve, or promote reels'],
+        users: ['Creators & Users', 'Manage accounts, creator profiles, and wallet balances'],
+        comments: ['Comments Moderation', 'Moderate live community discussions and replies'],
+        settings: ['Platform Servers & Integrations', 'Configure SMS gateways, Gmail SMTP, Firebase push notifications, and monetization rules'],
+        birthdays: ['Creator Birthday Center', 'Celebrate your creators on their birthday, wish them via WhatsApp/SMS, and distribute bonuses'],
+        system: ['API & Connection Hub', 'Configure Flutter endpoints for emulators and physical devices'],
+      };
+      if (titles[tabId]) {
+        document.getElementById('pageTitle').textContent = titles[tabId][0];
+        document.getElementById('pageSubtitle').textContent = titles[tabId][1];
+      }
+
+      if (tabId === 'dashboard') loadDashboard();
+      if (tabId === 'approval') loadApprovals();
+      if (tabId === 'videos') loadVideos();
+      if (tabId === 'users') loadUsers();
+      if (tabId === 'comments') loadComments();
+      if (tabId === 'settings') loadSettings();
+      if (tabId === 'birthdays') loadBirthdayCenter();
+      if (tabId === 'system') loadSystemInfo();
+    }
+
+    // Load Dashboard Stats
+    async function loadDashboard() {
+      try {
+        const res = await fetch('/api/admin/stats', { headers: authHeaders() });
+        if (res.status === 401) return logoutAdmin();
+        const data = await res.json();
+        if (data.status) {
+          const s = data.stats;
+          document.getElementById('statTotalUsers').textContent = s.total_users;
+          document.getElementById('statTotalVideos').textContent = s.total_videos;
+          document.getElementById('statNormalVideos').textContent = `${s.normal_videos_count} Normal`;
+          document.getElementById('statAdsVideos').textContent = `${s.ads_videos_count} Ads`;
+          document.getElementById('statTotalViews').textContent = Number(s.total_views).toLocaleString();
+          document.getElementById('statPendingVideos').textContent = s.pending_videos_count || 0;
+          document.getElementById('statTodayBirthdays').textContent = s.today_birthdays_count || 0;
+
+          // Pending badge in sidebar
+          const pendingBadge = document.getElementById('navApprovalBadge');
+          const pCount = s.pending_videos_count || 0;
+          if (pCount > 0) {
+            pendingBadge.textContent = `${pCount} Pending`;
+            pendingBadge.classList.remove('hidden');
+          } else {
+            pendingBadge.classList.add('hidden');
+          }
+
+          // Birthday badge in sidebar
+          const bdayBadge = document.getElementById('navBirthdayBadge');
+          const bCount = s.today_birthdays_count || 0;
+          if (bdayBadge) {
+            if (bCount > 0) {
+              bdayBadge.textContent = `${bCount} Today`;
+              bdayBadge.classList.remove('hidden');
+            } else {
+              bdayBadge.classList.add('hidden');
+            }
+          }
+
+          // Pending alert banner on dashboard
+          const alertBanner = document.getElementById('dashboardApprovalAlert');
+          if (alertBanner) {
+            if (pCount > 0) {
+              document.getElementById('alertPendingCount').textContent = pCount;
+              alertBanner.classList.remove('hidden');
+            } else {
+              alertBanner.classList.add('hidden');
+            }
+          }
+
+          renderRecentVideos(data.recent_videos || []);
+          renderBirthdays(data.today_birthdays || []);
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard:', err);
+      }
+    }
+
+    // Render Today's Birthdays Widget
+    function renderBirthdays(birthdays) {
+      const container = document.getElementById('birthdaysContainer');
+      const badge = document.getElementById('birthdaysCountBadge');
+      if (!container) return;
+
+      if (badge) {
+        badge.textContent = `${birthdays.length} Today`;
+      }
+
+      if (birthdays.length === 0) {
+        container.innerHTML = `
+          <div class="py-8 text-center space-y-2">
+            <div class="text-3xl opacity-60">🎂</div>
+            <p class="text-xs text-slate-400 font-medium">No creator birthdays today</p>
+            <p class="text-[10px] text-slate-500">Upcoming creator birthdays will automatically pop up here with 1-click WhatsApp wishing!</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = birthdays.map(u => `
+        <div class="p-3 bg-brand-input/70 border border-brand-border rounded-xl flex items-center justify-between hover:border-pink-500/40 transition">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-full bg-pink-500/20 border border-pink-500/30 flex items-center justify-center text-sm font-bold text-pink-300">
+              🎂
+            </div>
+            <div>
+              <p class="text-xs font-bold text-white">${escapeHtml(u.name || u.username)}</p>
+              <p class="text-[11px] text-pink-400 font-medium">@${escapeHtml(u.username)} &bull; ${escapeHtml(u.dob || '')}</p>
+            </div>
+          </div>
+          <button onclick="wishBirthdayWhatsApp('${u.whatsapp || u.mobile}', '${escapeHtml(u.name || u.username)}', '${escapeHtml(u.username)}')"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow transition">
+            <i data-lucide="send" class="w-3 h-3"></i>
+            <span>Wish 📲</span>
+          </button>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    function wishBirthdayWhatsApp(phone, name, username) {
+      const cleanPhone = (phone || '').replace(/\D/g, '');
+      const finalPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const text = encodeURIComponent(`Dear ${name || username}, 🎂🎉 Happy Birthday from the Telso World family! May your music & creative journey reach millions of fans this year. Keep rocking on Telso World! 🎵✨`);
+      window.open(`https://wa.me/${finalPhone}?text=${text}`, '_blank');
+    }
+
+    // Load Approvals Queue
+    async function loadApprovals() {
+      try {
+        const res = await fetch('/api/admin/videos?status=Pending', { headers: authHeaders() });
+        const data = await res.json();
+        const container = document.getElementById('approvalsContainer');
+        const badge = document.getElementById('approvalCountBadge');
+
+        if (!data.status || !data.data) {
+          container.innerHTML = `<p class="text-xs text-rose-400">Failed to load pending videos.</p>`;
+          return;
+        }
+
+        const pending = data.data;
+        if (badge) badge.textContent = `${pending.length} Pending`;
+
+        if (pending.length === 0) {
+          container.innerHTML = `
+            <div class="py-14 text-center space-y-3">
+              <div class="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto text-2xl">
+                ✓
+              </div>
+              <h4 class="font-bold text-base text-white">All Caught Up!</h4>
+              <p class="text-xs text-slate-400 max-w-sm mx-auto">There are no pending reels waiting for moderation. Newly uploaded reels from users will appear here immediately.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = `
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-black/30 text-slate-400 border-b border-brand-border">
+                <tr>
+                  <th class="py-3 px-4 font-semibold">Video Preview</th>
+                  <th class="py-3 px-4 font-semibold">Title & Subject</th>
+                  <th class="py-3 px-4 font-semibold">Creator</th>
+                  <th class="py-3 px-4 font-semibold">Audio Attribution</th>
+                  <th class="py-3 px-4 font-semibold">Submitted</th>
+                  <th class="py-3 px-4 font-semibold text-right">Moderation Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-brand-border">
+                ${pending.map(v => `
+                  <tr class="hover:bg-white/5 transition">
+                    <td class="py-3 px-4">
+                      <div class="relative w-14 h-20 rounded-xl bg-black overflow-hidden border border-brand-border cursor-pointer group shadow"
+                           onclick="playVideo('${v.video_url || v.video_path}', '${escapeHtml(v.title || v.subject)}')">
+                        <img src="${v.thumbnail_url || v.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100'}" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-black/40 group-hover:bg-black/20 flex items-center justify-center transition">
+                          <i data-lucide="play" class="w-5 h-5 text-white fill-white"></i>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 max-w-xs">
+                      <p class="font-bold text-white text-sm">${escapeHtml(v.title || 'Untitled Reel')}</p>
+                      <p class="text-slate-400 text-xs mt-0.5 line-clamp-2">${escapeHtml(v.subject || 'No description provided')}</p>
+                      <span class="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300">
+                        Pending Moderation
+                      </span>
+                    </td>
+                    <td class="py-3 px-4">
+                      <p class="font-bold text-white">${escapeHtml(v.name || v.username)}</p>
+                      <p class="text-[11px] text-brand-pink font-medium">@${escapeHtml(v.username || 'creator')}</p>
+                    </td>
+                    <td class="py-3 px-4 text-slate-300">
+                      <div class="flex items-center space-x-1 text-slate-400">
+                        <i data-lucide="music" class="w-3.5 h-3.5 text-purple-400"></i>
+                        <span class="truncate max-w-[140px]">${escapeHtml(v.audio_title || 'Original Audio')}</span>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                      ${new Date(v.created_at || Date.now()).toLocaleDateString('en-GB')}
+                    </td>
+                    <td class="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                      <button onclick="approveVideo(${v.id})"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-md transition inline-flex items-center space-x-1.5">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        <span>Approve & Push to Feed</span>
+                      </button>
+                      <button onclick="rejectVideo(${v.id})"
+                        class="bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 font-bold text-xs px-3 py-2 rounded-xl transition inline-flex items-center space-x-1">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                        <span>Reject</span>
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+        lucide.createIcons();
+      } catch (err) {
+        console.error('Failed to load approvals:', err);
+      }
+    }
+
+    // Approve Video
+    async function approveVideo(id) {
+      try {
+        const res = await fetch(`/api/admin/videos/${id}/approve`, {
+          method: 'PUT',
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (data.status) {
+          showToast(data.message || 'Reel approved and pushed live to feed! 🎉', 'success');
+          loadApprovals();
+          loadDashboard();
+          if (typeof loadVideos === 'function') loadVideos();
+        } else {
+          showToast(data.message || 'Failed to approve video', 'error');
+        }
+      } catch (err) {
+        showToast('Server connection error during approval', 'error');
+      }
+    }
+
+    // Reject Video
+    async function rejectVideo(id) {
+      if (!confirm('Are you sure you want to reject this video? It will not be published to the user feed.')) return;
+      try {
+        const res = await fetch(`/api/admin/videos/${id}/reject`, {
+          method: 'PUT',
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (data.status) {
+          showToast('Video rejected.', 'info');
+          loadApprovals();
+          loadDashboard();
+          if (typeof loadVideos === 'function') loadVideos();
+        }
+      } catch (err) {
+        showToast('Server connection error during reject', 'error');
+      }
+    }
+
+    // Toast notification
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        info: 'bg-brand-card border border-brand-border text-slate-100',
+      };
+      toast.className = `fixed bottom-6 right-6 z-50 ${colors[type] || colors.info} px-5 py-3 rounded-2xl shadow-2xl text-xs font-bold flex items-center space-x-2 transition-all duration-300 transform translate-y-2 opacity-0`;
+      toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      }, 50);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function renderRecentVideos(videos) {
+      const container = document.getElementById('recentVideosTable');
+      if (videos.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-500 py-4">No reels found.</p>`;
+        return;
+      }
+      container.innerHTML = `
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="text-slate-400 border-b border-brand-border">
+              <th class="pb-3 font-semibold">Video</th>
+              <th class="pb-3 font-semibold">Creator</th>
+              <th class="pb-3 font-semibold">Type</th>
+              <th class="pb-3 font-semibold">Views</th>
+              <th class="pb-3 font-semibold">Likes</th>
+              <th class="pb-3 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-brand-border">
+            ${videos.map(v => `
+              <tr class="hover:bg-white/5 transition">
+                <td class="py-3 font-medium text-white flex items-center space-x-3">
+                  <div class="relative w-12 h-16 rounded-lg bg-black overflow-hidden shrink-0 border border-brand-border cursor-pointer group"
+                       onclick="playVideo('${v.video_url || v.video_path}', '${escapeHtml(v.title || v.subject)}')">
+                    <img src="${v.thumbnail_url || v.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100'}" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-black/40 group-hover:bg-black/20 flex items-center justify-center transition">
+                      <i data-lucide="play" class="w-4 h-4 text-white fill-white"></i>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="font-bold text-white text-xs">${escapeHtml(v.title || 'Untitled')}</p>
+                    <p class="text-[11px] text-slate-400 line-clamp-1">${escapeHtml(v.subject || '')}</p>
+                  </div>
+                </td>
+                <td class="py-3 text-slate-300 font-medium">${escapeHtml(v.name || v.username)}</td>
+                <td class="py-3">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${v.video_type === 'ads' ? 'bg-purple-500/20 text-purple-300' : 'bg-brand-pink/20 text-brand-pink'}">
+                    ${v.video_type === 'ads' ? 'Ad / Promo' : 'Normal Reel'}
+                  </span>
+                </td>
+                <td class="py-3 text-slate-300 font-mono">${(v.view_count || 0).toLocaleString()}</td>
+                <td class="py-3 text-slate-300 font-mono">${(v.likes_count || 0).toLocaleString()}</td>
+                <td class="py-3 text-right">
+                  <button onclick="playVideo('${v.video_url || v.video_path}', '${escapeHtml(v.title || v.subject)}')"
+                    class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold">
+                    Watch
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      lucide.createIcons();
+    }
+
+    // Load All Videos
+    async function loadVideos() {
+      const type = document.getElementById('videoTypeFilter').value;
+      const status = document.getElementById('videoStatusFilter').value;
+      try {
+        const res = await fetch(`/api/admin/videos?type=${type}&status=${status}`, { headers: authHeaders() });
+        const data = await res.json();
+        if (data.status) {
+          allVideos = data.data;
+          renderVideosTable(allVideos);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function filterVideos() {
+      const query = document.getElementById('videoSearchInput').value.toLowerCase();
+      const filtered = allVideos.filter(v =>
+        (v.title && v.title.toLowerCase().includes(query)) ||
+        (v.subject && v.subject.toLowerCase().includes(query)) ||
+        (v.name && v.name.toLowerCase().includes(query))
+      );
+      renderVideosTable(filtered);
+    }
+
+    function renderVideosTable(videos) {
+      const container = document.getElementById('videosTableContainer');
+      if (videos.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-500 p-8 text-center">No videos matching filter.</p>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <table class="w-full text-left text-xs">
+          <thead class="bg-black/30 text-slate-400 border-b border-brand-border">
+            <tr>
+              <th class="py-3 px-4 font-semibold">Video & Thumbnail</th>
+              <th class="py-3 px-4 font-semibold">Creator</th>
+              <th class="py-3 px-4 font-semibold">Category</th>
+              <th class="py-3 px-4 font-semibold">Type</th>
+              <th class="py-3 px-4 font-semibold">Status</th>
+              <th class="py-3 px-4 font-semibold">Views / Likes</th>
+              <th class="py-3 px-4 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-brand-border">
+            ${videos.map(v => `
+              <tr class="hover:bg-white/5 transition">
+                <td class="py-3 px-4 font-medium text-white flex items-center space-x-3">
+                  <div class="relative w-12 h-16 rounded-lg bg-black overflow-hidden shrink-0 border border-brand-border cursor-pointer group"
+                       onclick="playVideo('${v.video_url || v.video_path}', '${escapeHtml(v.title || v.subject)}')">
+                    <img src="${v.thumbnail_url || v.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100'}" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-black/40 group-hover:bg-black/20 flex items-center justify-center transition">
+                      <i data-lucide="play" class="w-4 h-4 text-white fill-white"></i>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="font-bold text-white text-xs">${escapeHtml(v.title || 'Untitled')}</p>
+                    <p class="text-[11px] text-slate-400 line-clamp-1">${escapeHtml(v.subject || '')}</p>
+                  </div>
+                </td>
+                <td class="py-3 px-4 text-slate-300 font-medium">${escapeHtml(v.name || v.username)}</td>
+                <td class="py-3 px-4 text-slate-400">${escapeHtml(v.category || 'General')}</td>
+                <td class="py-3 px-4">
+                  <button onclick="toggleVideoType(${v.id}, '${v.video_type}')"
+                    title="Click to toggle Normal / Ad"
+                    class="px-2.5 py-1 rounded-full text-[10px] font-bold transition ${v.video_type === 'ads' ? 'bg-purple-500/20 text-purple-300 hover:bg-purple-500/30' : 'bg-brand-pink/20 text-brand-pink hover:bg-brand-pink/30'}">
+                    ${v.video_type === 'ads' ? 'Ad / Promo' : 'Normal Feed'}
+                  </button>
+                </td>
+                <td class="py-3 px-4">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.status === 'Approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}">
+                    ${v.status || 'Approved'}
+                  </span>
+                </td>
+                <td class="py-3 px-4 font-mono text-slate-300">
+                  <span>${(v.view_count || 0).toLocaleString()} views</span><br>
+                  <span class="text-rose-400">${(v.likes_count || 0).toLocaleString()} likes</span>
+                </td>
+                <td class="py-3 px-4 text-right space-x-1">
+                  <button onclick="playVideo('${v.video_url || v.video_path}', '${escapeHtml(v.title || v.subject)}')"
+                    class="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white" title="Play Reel">
+                    <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <button onclick="deleteVideo(${v.id})"
+                    class="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400" title="Delete Video">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      lucide.createIcons();
+    }
+
+    async function toggleVideoType(id, currentType) {
+      const nextType = currentType === 'ads' ? 'normal' : 'ads';
+      try {
+        const res = await fetch(`/api/admin/videos/${id}`, {
+          method: 'PUT',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_type: nextType }),
+        });
+        if (res.ok) loadVideos();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function deleteVideo(id) {
+      if (!confirm('Are you sure you want to remove this reel from Telso World?')) return;
+      try {
+        const res = await fetch(`/api/admin/videos/${id}`, {
+          method: 'DELETE',
+          headers: authHeaders(),
+        });
+        if (res.ok) loadVideos();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Load Users
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/admin/users', { headers: authHeaders() });
+        const data = await res.json();
+        if (data.status) {
+          allUsers = data.data;
+          renderUsersTable(allUsers);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function filterUsers() {
+      const q = document.getElementById('userSearchInput').value.toLowerCase();
+      const filtered = allUsers.filter(u =>
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.username && u.username.toLowerCase().includes(q)) ||
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.mobile_no && u.mobile_no.includes(q))
+      );
+      renderUsersTable(filtered);
+    }
+
+    function renderUsersTable(users) {
+      const container = document.getElementById('usersTableContainer');
+      if (users.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-500 p-8 text-center">No creators found.</p>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <table class="w-full text-left text-xs">
+          <thead class="bg-black/30 text-slate-400 border-b border-brand-border">
+            <tr>
+              <th class="py-3 px-4 font-semibold">Creator</th>
+              <th class="py-3 px-4 font-semibold">Contact & Location</th>
+              <th class="py-3 px-4 font-semibold">Birthday 🎂</th>
+              <th class="py-3 px-4 font-semibold">School / Academy</th>
+              <th class="py-3 px-4 font-semibold">Referral Code</th>
+              <th class="py-3 px-4 font-semibold">Wallet Balance</th>
+              <th class="py-3 px-4 font-semibold">Status</th>
+              <th class="py-3 px-4 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-brand-border">
+            ${users.map(u => `
+              <tr class="hover:bg-white/5 transition">
+                <td class="py-3 px-4 font-medium text-white flex items-center space-x-3">
+                  <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-brand-pink to-brand-purple flex items-center justify-center font-bold text-xs text-white">
+                    ${(u.name || u.username).substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p class="font-bold text-white text-xs">${escapeHtml(u.name || '')}</p>
+                    <p class="text-[11px] text-brand-pink font-semibold">@${escapeHtml(u.username)}</p>
+                  </div>
+                </td>
+                <td class="py-3 px-4 text-slate-300">
+                  <span class="font-mono text-xs">${escapeHtml(u.mobile_no || '—')}</span>
+                  ${u.whatsapp ? `<br><a href="javascript:void(0)" onclick="wishBirthdayWhatsApp('${u.whatsapp || u.mobile_no}', '${escapeHtml(u.name || u.username)}', '${escapeHtml(u.username)}')" class="inline-flex items-center text-[10px] text-emerald-400 hover:underline"><i data-lucide='message-circle' class='w-3 h-3 mr-1 inline'></i>${escapeHtml(u.whatsapp)}</a>` : ''}
+                  <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(u.email || '')}</p>
+                </td>
+                <td class="py-3 px-4 text-slate-300">
+                  <div class="flex items-center space-x-1.5">
+                    <span class="text-sm">🎂</span>
+                    <span class="font-medium text-pink-300">${escapeHtml(u.dob || 'Not set')}</span>
+                  </div>
+                </td>
+                <td class="py-3 px-4 text-slate-300">${escapeHtml(u.school_name || '—')}</td>
+                <td class="py-3 px-4 font-mono text-amber-400 font-bold">${escapeHtml(u.referral_code || '—')}</td>
+                <td class="py-3 px-4 font-mono font-bold text-emerald-400">₹${u.wallet_balance || '0.00'}</td>
+                <td class="py-3 px-4">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">
+                    ${u.status}
+                  </span>
+                </td>
+                <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
+                  <button onclick="wishBirthdayWhatsApp('${u.whatsapp || u.mobile_no}', '${escapeHtml(u.name || u.username)}', '${escapeHtml(u.username)}')"
+                    class="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400" title="Wish on WhatsApp 🎂">
+                    <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <button onclick="openWalletModal(${u.id}, '${escapeHtml(u.name || u.username)}', '${u.wallet_balance}')"
+                    class="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400" title="Adjust Wallet Money">
+                    <i data-lucide="wallet" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <button onclick="toggleUserStatus(${u.id}, '${u.status}')"
+                    class="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300" title="Toggle Ban / Active">
+                    <i data-lucide="${u.status === 'active' ? 'user-x' : 'user-check'}" class="w-3.5 h-3.5"></i>
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      lucide.createIcons();
+    }
+
+    async function toggleUserStatus(id, currentStatus) {
+      const next = currentStatus === 'active' ? 'banned' : 'active';
+      try {
+        await fetch(`/api/admin/users/${id}/status`, {
+          method: 'PUT',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: next }),
+        });
+        loadUsers();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Load Comments
+    async function loadComments() {
+      try {
+        const res = await fetch('/api/admin/comments', { headers: authHeaders() });
+        const data = await res.json();
+        if (data.status) {
+          const container = document.getElementById('commentsTableContainer');
+          if (data.data.length === 0) {
+            container.innerHTML = `<p class="text-xs text-slate-500 py-6 text-center">No comments found.</p>`;
+            return;
+          }
+          container.innerHTML = `
+            <table class="w-full text-left text-xs">
+              <thead class="bg-black/30 text-slate-400 border-b border-brand-border">
+                <tr>
+                  <th class="py-3 px-4 font-semibold">User</th>
+                  <th class="py-3 px-4 font-semibold">Comment</th>
+                  <th class="py-3 px-4 font-semibold">Reel Video</th>
+                  <th class="py-3 px-4 font-semibold">Likes</th>
+                  <th class="py-3 px-4 font-semibold text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-brand-border">
+                ${data.data.map(c => `
+                  <tr class="hover:bg-white/5 transition">
+                    <td class="py-3 px-4 font-bold text-white">${escapeHtml(c.user || c.username)}</td>
+                    <td class="py-3 px-4 text-slate-200">${escapeHtml(c.comment || c.content)}</td>
+                    <td class="py-3 px-4 text-brand-pink">${escapeHtml(c.video_title || 'Video #' + c.video_id)}</td>
+                    <td class="py-3 px-4 font-mono text-slate-400">${c.likes || 0}</td>
+                    <td class="py-3 px-4 text-right">
+                      <button onclick="deleteComment(${c.id})" class="p-1 rounded bg-rose-500/15 text-rose-400 hover:bg-rose-500/25">
+                        <i data-lucide="trash" class="w-3 h-3"></i>
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+          lucide.createIcons();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function deleteComment(id) {
+      if (!confirm('Delete this comment?')) return;
+      await fetch(`/api/admin/comments/${id}`, { method: 'DELETE', headers: authHeaders() });
+      loadComments();
+    }
+
+    // Video Player Modal
+    function playVideo(url, title) {
+      const modal = document.getElementById('videoModal');
+      const player = document.getElementById('videoPlayer');
+      document.getElementById('videoModalTitle').textContent = title || 'Reel Player';
+      document.getElementById('videoModalSubject').textContent = title || '';
+      player.src = url;
+      modal.classList.remove('hidden');
+    }
+
+    function closeVideoModal() {
+      const modal = document.getElementById('videoModal');
+      const player = document.getElementById('videoPlayer');
+      player.pause();
+      player.src = '';
+      modal.classList.add('hidden');
+    }
+
+    // Upload Modal
+    function openUploadModal() {
+      document.getElementById('uploadModal').classList.remove('hidden');
+    }
+    function closeUploadModal() {
+      document.getElementById('uploadModal').classList.add('hidden');
+      document.getElementById('uploadVideoForm').reset();
+      document.getElementById('uploadStatusMsg').classList.add('hidden');
+    }
+
+    async function handleUploadSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnUploadSubmit');
+      const statusMsg = document.getElementById('uploadStatusMsg');
+      btn.disabled = true;
+      btn.textContent = 'Uploading Reel...';
+
+      const formData = new FormData();
+      formData.append('title', document.getElementById('uploadTitle').value);
+      formData.append('subject', document.getElementById('uploadSubject').value);
+      formData.append('category', document.getElementById('uploadCategory').value);
+      formData.append('video_type', document.getElementById('uploadType').value);
+
+      const fileInput = document.getElementById('uploadFile');
+      if (fileInput.files.length > 0) {
+        formData.append('video_file', fileInput.files[0]);
+      } else {
+        formData.append('video_url', document.getElementById('uploadUrl').value);
+      }
+
+      try {
+        const res = await fetch('/api/admin/videos', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${adminToken}` },
+          body: formData,
+        });
+        const data = await res.json();
+        if (data.status) {
+          statusMsg.textContent = 'Uploaded successfully!';
+          statusMsg.className = 'text-xs text-emerald-400 block';
+          setTimeout(() => {
+            closeUploadModal();
+            loadVideos();
+            loadDashboard();
+          }, 800);
+        } else {
+          statusMsg.textContent = data.message || 'Upload failed';
+          statusMsg.className = 'text-xs text-rose-400 block';
+        }
+      } catch (err) {
+        statusMsg.textContent = 'Server connection error during upload';
+        statusMsg.className = 'text-xs text-rose-400 block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Publish Reel';
+      }
+    }
+
+    // Wallet Modal
+    function openWalletModal(id, name, balance) {
+      document.getElementById('walletUserId').value = id;
+      document.getElementById('walletModalSubtitle').textContent = `Creator: ${name} (Current: ₹${balance})`;
+      document.getElementById('walletModal').classList.remove('hidden');
+    }
+    function closeWalletModal() {
+      document.getElementById('walletModal').classList.add('hidden');
+      document.getElementById('walletForm').reset();
+    }
+
+    async function handleWalletSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('walletUserId').value;
+      const type = document.getElementById('walletType').value;
+      const amount = document.getElementById('walletAmount').value;
+      const note = document.getElementById('walletNote').value;
+
+      try {
+        const res = await fetch(`/api/admin/users/${id}/wallet`, {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, amount, note }),
+        });
+        if (res.ok) {
+          closeWalletModal();
+          loadUsers();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Load System Info & IP Helper
+    async function loadSystemInfo() {
+      try {
+        const res = await fetch('/api/admin/system', { headers: authHeaders() });
+        const data = await res.json();
+        if (data.status) {
+          const rec = data.recommended_urls;
+          document.getElementById('urlAndroidEmu').textContent = rec.android_emulator;
+          document.getElementById('urlLocalhost').textContent = rec.web_and_ios_simulator;
+          document.getElementById('urlPhysicalLan').textContent = rec.physical_devices;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text);
+      alert(`Copied to clipboard: ${text}`);
+    }
+
+    function copyLanUrl() {
+      const text = document.getElementById('urlPhysicalLan').textContent;
+      copyToClipboard(text);
+    }
+
+    async function testApiHealth() {
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        alert(`API Health Check: ONLINE\nVersion: ${data.version}\nTimestamp: ${data.timestamp}`);
+      } catch (err) {
+        alert('API Health Check: OFFLINE / Unreachable');
+      }
+    }
+
+    // --- SETTINGS & INTEGRATIONS ---
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/admin/settings', { headers: authHeaders() });
+        if (res.status === 401) return logoutAdmin();
+        const data = await res.json();
+        if (data.status && data.data) {
+          const s = data.data;
+
+          // SMS
+          const sms = s.sms || {};
+          document.getElementById('smsIsActive').checked = sms.is_active !== false;
+          if (sms.provider) document.getElementById('smsProvider').value = sms.provider;
+          if (sms.sender_id) document.getElementById('smsSenderId').value = sms.sender_id;
+          if (sms.api_key) document.getElementById('smsApiKey').value = sms.api_key;
+          if (sms.twilio_account_sid) document.getElementById('smsTwilioSid').value = sms.twilio_account_sid;
+          if (sms.twilio_phone_number) document.getElementById('smsTwilioPhone').value = sms.twilio_phone_number;
+          if (sms.template) document.getElementById('smsTemplate').value = sms.template;
+
+          toggleTwilioFields();
+
+          // SMTP
+          const smtp = s.smtp || {};
+          document.getElementById('smtpIsActive').checked = smtp.is_active !== false;
+          if (smtp.provider) document.getElementById('smtpProvider').value = smtp.provider;
+          if (smtp.host) document.getElementById('smtpHost').value = smtp.host;
+          if (smtp.port) document.getElementById('smtpPort').value = smtp.port;
+          if (smtp.username) document.getElementById('smtpUsername').value = smtp.username;
+          if (smtp.password) document.getElementById('smtpPassword').value = smtp.password;
+          if (smtp.from_name) document.getElementById('smtpFromName').value = smtp.from_name;
+          if (smtp.from_email) document.getElementById('smtpFromEmail').value = smtp.from_email;
+
+          // Firebase
+          const fb = s.firebase || {};
+          document.getElementById('firebaseIsActive').checked = fb.is_active !== false;
+          if (fb.project_id) document.getElementById('firebaseProjectId').value = fb.project_id;
+          if (fb.default_channel_id) document.getElementById('firebaseChannelId').value = fb.default_channel_id;
+          if (fb.fcm_server_key) document.getElementById('firebaseServerKey').value = fb.fcm_server_key;
+
+          // Platform rules
+          const p = s.platform || {};
+          if (p.welcome_bonus !== undefined) document.getElementById('ruleWelcomeBonus').value = p.welcome_bonus;
+          if (p.referral_reward !== undefined) document.getElementById('ruleReferralReward').value = p.referral_reward;
+          if (p.min_withdrawal !== undefined) document.getElementById('ruleMinWithdrawal').value = p.min_withdrawal;
+          if (p.max_upload_size_mb !== undefined) document.getElementById('ruleMaxUploadSize').value = p.max_upload_size_mb;
+          document.getElementById('ruleRequireApproval').checked = p.require_admin_approval !== false;
+          document.getElementById('ruleBirthdayWishing').checked = p.birthday_wishing_enabled !== false;
+        }
+      } catch (err) {
+        console.error('Failed to load settings:', err);
+      }
+    }
+
+    function toggleTwilioFields() {
+      const prov = document.getElementById('smsProvider').value;
+      const twilioFields = document.getElementById('twilioFields');
+      if (prov === 'twilio') {
+        twilioFields.classList.remove('hidden');
+      } else {
+        twilioFields.classList.add('hidden');
+      }
+    }
+    document.addEventListener('change', (e) => {
+      if (e.target && e.target.id === 'smsProvider') toggleTwilioFields();
+    });
+
+    async function saveAllSettings() {
+      const payload = {
+        sms: {
+          is_active: document.getElementById('smsIsActive').checked,
+          provider: document.getElementById('smsProvider').value,
+          sender_id: document.getElementById('smsSenderId').value.trim(),
+          api_key: document.getElementById('smsApiKey').value.trim(),
+          twilio_account_sid: document.getElementById('smsTwilioSid').value.trim(),
+          twilio_phone_number: document.getElementById('smsTwilioPhone').value.trim(),
+          template: document.getElementById('smsTemplate').value.trim(),
+        },
+        smtp: {
+          is_active: document.getElementById('smtpIsActive').checked,
+          provider: document.getElementById('smtpProvider').value,
+          host: document.getElementById('smtpHost').value.trim(),
+          port: parseInt(document.getElementById('smtpPort').value, 10) || 587,
+          username: document.getElementById('smtpUsername').value.trim(),
+          password: document.getElementById('smtpPassword').value.trim(),
+          from_name: document.getElementById('smtpFromName').value.trim(),
+          from_email: document.getElementById('smtpFromEmail').value.trim(),
+        },
+        firebase: {
+          is_active: document.getElementById('firebaseIsActive').checked,
+          project_id: document.getElementById('firebaseProjectId').value.trim(),
+          default_channel_id: document.getElementById('firebaseChannelId').value.trim(),
+          fcm_server_key: document.getElementById('firebaseServerKey').value.trim(),
+        },
+        platform: {
+          welcome_bonus: parseFloat(document.getElementById('ruleWelcomeBonus').value) || 50.0,
+          referral_reward: parseFloat(document.getElementById('ruleReferralReward').value) || 50.0,
+          min_withdrawal: parseFloat(document.getElementById('ruleMinWithdrawal').value) || 100.0,
+          max_upload_size_mb: parseInt(document.getElementById('ruleMaxUploadSize').value, 10) || 250,
+          require_admin_approval: document.getElementById('ruleRequireApproval').checked,
+          birthday_wishing_enabled: document.getElementById('ruleBirthdayWishing').checked,
+        },
+      };
+
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'PUT',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        const alertBox = document.getElementById('settingsAlertBox');
+        if (alertBox) {
+          alertBox.className = 'p-3 rounded-xl text-xs font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center space-x-2';
+          alertBox.innerHTML = `<span>✓</span><span>${escapeHtml(data.message || 'Settings saved successfully!')}</span>`;
+          alertBox.classList.remove('hidden');
+          setTimeout(() => alertBox.classList.add('hidden'), 5000);
+        }
+      } catch (err) {
+        alert('Failed to save settings');
+      }
+    }
+
+    async function dispatchTestSms() {
+      const mobile_no = document.getElementById('testSmsNumber').value.trim();
+      const resBox = document.getElementById('testSmsResult');
+      if (!mobile_no) return alert('Please enter recipient mobile number');
+
+      resBox.className = 'text-[11px] p-2.5 rounded-lg bg-black/60 border border-emerald-500/30 text-slate-300 font-mono space-y-1';
+      resBox.textContent = 'Dispatching test SMS...';
+      resBox.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/admin/test-sms', {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mobile_no }),
+        });
+        const data = await res.json();
+        if (data.status) {
+          const d = data.details || {};
+          resBox.innerHTML = `
+            <p class="text-emerald-400 font-bold">✓ ${escapeHtml(data.message)}</p>
+            <p class="text-[10px] text-slate-400">Gateway: <b class="text-white">${escapeHtml(d.provider)}</b> | Sender: <b class="text-white">${escapeHtml(d.sender_id)}</b></p>
+            <p class="text-[10px] text-slate-400">Preview: <span class="text-amber-300">"${escapeHtml(d.text)}"</span></p>
+            <p class="text-[10px] text-slate-500">Ref: ${escapeHtml(d.request_id)} &bull; ${new Date().toLocaleTimeString()}</p>
+          `;
+        } else {
+          resBox.className = 'text-[11px] p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 font-mono';
+          resBox.textContent = `Error: ${data.message || 'SMS test failed'}`;
+        }
+      } catch (err) {
+        resBox.textContent = 'Server connection error';
+      }
+    }
+
+    async function dispatchTestEmail() {
+      const email = document.getElementById('testEmailAddress').value.trim();
+      const resBox = document.getElementById('testEmailResult');
+      if (!email) return alert('Please enter recipient email address');
+
+      resBox.className = 'text-[11px] p-2.5 rounded-lg bg-black/60 border border-rose-500/30 text-slate-300 font-mono space-y-1';
+      resBox.textContent = 'Connecting to SMTP server...';
+      resBox.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/admin/test-email', {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        if (data.status) {
+          const d = data.details || {};
+          resBox.innerHTML = `
+            <p class="text-rose-400 font-bold">✓ ${escapeHtml(data.message)}</p>
+            <p class="text-[10px] text-slate-400">Host: <b class="text-white">${escapeHtml(d.host)}:${d.port}</b> | Provider: <b class="text-white">${escapeHtml(d.provider)}</b></p>
+            <p class="text-[10px] text-slate-400">Status: <span class="text-emerald-300">${escapeHtml(d.smtp_handshake)}</span></p>
+            <p class="text-[10px] text-slate-500">${new Date().toLocaleTimeString()}</p>
+          `;
+        } else {
+          resBox.className = 'text-[11px] p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 font-mono';
+          resBox.textContent = `Error: ${data.message || 'Email test failed'}`;
+        }
+      } catch (err) {
+        resBox.textContent = 'Server connection error';
+      }
+    }
+
+    async function dispatchBroadcastNotification() {
+      const audience = document.getElementById('broadcastAudience').value;
+      const title = document.getElementById('broadcastTitle').value.trim();
+      const body = document.getElementById('broadcastBody').value.trim();
+      const resBox = document.getElementById('broadcastResult');
+
+      if (!title || !body) return alert('Please enter notification title and body');
+
+      resBox.className = 'text-[11px] p-2.5 rounded-lg bg-black/60 border border-amber-500/30 text-slate-300 font-mono space-y-1';
+      resBox.textContent = 'Broadcasting FCM message...';
+      resBox.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/admin/broadcast-notification', {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audience, title, body }),
+        });
+        const data = await res.json();
+        if (data.status) {
+          resBox.innerHTML = `
+            <p class="text-amber-400 font-bold">✓ ${escapeHtml(data.message)}</p>
+            <p class="text-[10px] text-slate-400">Audience: <b class="text-white">${escapeHtml(audience)}</b> | Project: <b class="text-white">${escapeHtml(data.firebase_project)}</b></p>
+            <p class="text-[10px] text-slate-500">Sent at ${new Date().toLocaleTimeString()}</p>
+          `;
+          document.getElementById('broadcastTitle').value = '';
+          document.getElementById('broadcastBody').value = '';
+        } else {
+          resBox.textContent = `Error: ${data.message || 'Broadcast failed'}`;
+        }
+      } catch (err) {
+        resBox.textContent = 'Server connection error';
+      }
+    }
+
+    // --- BIRTHDAY CELEBRATION CENTER ---
+    async function loadBirthdayCenter() {
+      try {
+        const res = await fetch('/api/admin/birthdays', { headers: authHeaders() });
+        if (res.status === 401) return logoutAdmin();
+        const data = await res.json();
+        if (data.status) {
+          const today = data.today || [];
+          const upcoming = data.upcoming || [];
+
+          document.getElementById('centerTodayCountBadge').textContent = `${today.length} Celebrating Today`;
+          document.getElementById('centerUpcomingCountBadge').textContent = `${upcoming.length} upcoming in next 30 days`;
+
+          // Render today cards
+          const todayContainer = document.getElementById('centerTodayBirthdaysContainer');
+          if (today.length === 0) {
+            todayContainer.innerHTML = `
+              <div class="col-span-2 py-8 text-center text-slate-400 space-y-2">
+                <span class="text-4xl">🎂</span>
+                <p class="text-xs font-semibold">No creators celebrating birthdays today</p>
+                <p class="text-[10px] text-slate-500">Upcoming creator birthdays are listed below</p>
+              </div>
+            `;
+          } else {
+            todayContainer.innerHTML = today.map(u => `
+              <div class="bg-brand-card/90 border border-pink-500/40 rounded-2xl p-5 space-y-3 relative overflow-hidden shadow-lg shadow-pink-500/10">
+                <div class="absolute top-0 right-0 px-3 py-1 bg-pink-500/20 text-pink-300 text-[10px] font-black rounded-bl-xl border-l border-b border-pink-500/30">
+                  BIRTHDAY TODAY 🎂
+                </div>
+                <div class="flex items-center space-x-3.5">
+                  <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center text-xl shadow-md">
+                    🎉
+                  </div>
+                  <div>
+                    <h5 class="font-bold text-sm text-white">${escapeHtml(u.name || u.username)}</h5>
+                    <p class="text-xs text-pink-400 font-semibold">@${escapeHtml(u.username)}</p>
+                    <p class="text-[11px] text-slate-400">${escapeHtml(u.state || '')} &bull; 📱 ${escapeHtml(u.mobile || '')}</p>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 pt-1">
+                  <button onclick="wishBirthdayWhatsApp('${u.whatsapp || u.mobile}', '${escapeHtml(u.name || u.username)}', '${escapeHtml(u.username)}')"
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center space-x-1.5 transition">
+                    <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                    <span>WhatsApp</span>
+                  </button>
+                  <button onclick="sendBirthdayWishAdmin(${u.id}, 'sms')"
+                    class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center space-x-1.5 transition">
+                    <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+                    <span>Send SMS</span>
+                  </button>
+                  <button onclick="sendBirthdayWishAdmin(${u.id}, 'push')"
+                    class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center space-x-1.5 transition">
+                    <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+                    <span>Push + ₹50</span>
+                  </button>
+                </div>
+              </div>
+            `).join('');
+          }
+
+          // Render upcoming table
+          const upContainer = document.getElementById('centerUpcomingTableContainer');
+          if (upcoming.length === 0) {
+            upContainer.innerHTML = `<div class="py-6 text-center text-slate-400 text-xs">No upcoming birthdays in next 30 days.</div>`;
+          } else {
+            upContainer.innerHTML = `
+              <table class="w-full text-left text-xs">
+                <thead class="text-slate-400 uppercase font-semibold border-b border-brand-border">
+                  <tr>
+                    <th class="pb-3">Creator</th>
+                    <th class="pb-3">Handle</th>
+                    <th class="pb-3">State</th>
+                    <th class="pb-3">DOB</th>
+                    <th class="pb-3">Countdown</th>
+                    <th class="pb-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-brand-border text-slate-200">
+                  ${upcoming.map(u => `
+                    <tr class="hover:bg-white/5 transition">
+                      <td class="py-3 font-semibold text-white">${escapeHtml(u.name || u.username)}</td>
+                      <td class="py-3 text-pink-400">@${escapeHtml(u.username)}</td>
+                      <td class="py-3 text-slate-400">${escapeHtml(u.state || '—')}</td>
+                      <td class="py-3 font-mono">${escapeHtml(u.dob || '—')}</td>
+                      <td class="py-3">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.days_until <= 1 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'}">
+                          ${u.days_until === 0 ? 'Today 🎉' : (u.days_until === 1 ? 'Tomorrow ⏳' : `In ${u.days_until} days`)}
+                        </span>
+                      </td>
+                      <td class="py-3 text-right">
+                        <button onclick="wishBirthdayWhatsApp('${u.whatsapp || u.mobile}', '${escapeHtml(u.name || u.username)}', '${escapeHtml(u.username)}')"
+                          class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-medium transition">
+                          Preview Wish 📲
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            `;
+          }
+
+          if (window.lucide) lucide.createIcons();
+        }
+      } catch (err) {
+        console.error('Failed to load birthday center:', err);
+      }
+    }
+
+    async function sendBirthdayWishAdmin(userId, channel) {
+      try {
+        const res = await fetch('/api/admin/send-birthday-wish', {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, channel }),
+        });
+        const data = await res.json();
+        const alertBox = document.getElementById('birthdayCenterAlert');
+        if (alertBox) {
+          alertBox.className = 'p-3 rounded-xl text-xs font-semibold bg-pink-500/15 border border-pink-500/30 text-pink-300 flex items-center space-x-2';
+          alertBox.innerHTML = `<span>🎉</span><span>${escapeHtml(data.message || 'Birthday wish dispatched!')}</span>`;
+          alertBox.classList.remove('hidden');
+          setTimeout(() => alertBox.classList.add('hidden'), 5000);
+        }
+      } catch (err) {
+        alert('Failed to send birthday wish');
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

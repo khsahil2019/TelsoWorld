@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
 import 'package:telsoworld/controllers/main_nav_controller.dart';
+import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:video_editor/video_editor.dart';
 import 'package:video_player/video_player.dart';
@@ -33,6 +34,7 @@ class ReelUploadScreen extends StatefulWidget {
 class _ReelUploadScreenState extends State<ReelUploadScreen> {
   final ImagePicker _picker = ImagePicker();
   final Trimmer _trimmer = Trimmer();
+  final TextEditingController _titleController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
 
@@ -51,6 +53,7 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
 
   @override
   void dispose() {
+    _titleController.dispose();
     _subjectController.dispose();
     _nameController.dispose();
     super.dispose();
@@ -318,13 +321,13 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
       return;
     }
 
-    if (_subjectController.text.trim().isEmpty) {
-      _showSnackBar('Enter a reel subject before uploading.');
+    if (_titleController.text.trim().isEmpty) {
+      _showSnackBar('Enter a reel title before uploading.');
       return;
     }
 
-    if (_nameController.text.trim().isEmpty) {
-      _showSnackBar('Enter your display name before uploading.');
+    if (_subjectController.text.trim().isEmpty) {
+      _showSnackBar('Enter a reel subject / description before uploading.');
       return;
     }
 
@@ -355,15 +358,18 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('https://telsoworld.com/api/reporter/upload-video'),
+        Uri.parse('${ApiEndpoints.baseUrl}/reporter/upload-video'),
       );
 
       request.headers.addAll({
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       });
+      request.fields['title'] = _titleController.text.trim();
       request.fields['subject'] = _subjectController.text.trim();
-      request.fields['name'] = _nameController.text.trim();
+      request.fields['name'] = _nameController.text.trim().isNotEmpty
+          ? _nameController.text.trim()
+          : _titleController.text.trim();
       request.files.add(
         await http.MultipartFile.fromPath(
           'video',
@@ -395,6 +401,15 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
       if (response.statusCode >= 200 &&
           response.statusCode < 300 &&
           (responseJson == null || responseJson['status'] != false)) {
+        Get.snackbar(
+          'Reel Uploaded! ⏳',
+          'Sent to Admin Approval Queue. Your video will appear on the feed once approved.',
+          backgroundColor: const Color(0xFF161622),
+          colorText: const Color(0xFF10B981),
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 4),
+          icon: const Icon(Icons.shield_outlined, color: Color(0xFF10B981)),
+        );
         Navigator.of(context).pop(true);
         return;
       }
@@ -974,16 +989,22 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
           ),
           const SizedBox(height: 18),
           _UploadField(
+            controller: _titleController,
+            label: 'Title *',
+            hintText: 'Enter reel title or caption',
+          ),
+          const SizedBox(height: 14),
+          _UploadField(
             controller: _subjectController,
-            label: 'Subject',
-            hintText: 'Describe the reel topic',
+            label: 'Subject *',
+            hintText: 'Describe the reel topic, hashtags, and description',
             maxLines: 2,
           ),
           const SizedBox(height: 14),
           _UploadField(
             controller: _nameController,
-            label: 'Name',
-            hintText: 'Enter reporter or creator name',
+            label: 'Creator / Display Name (Optional)',
+            hintText: 'Leave empty to use your registered username',
           ),
         ],
       ),

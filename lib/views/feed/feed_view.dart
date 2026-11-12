@@ -7,13 +7,15 @@ import 'package:get/get.dart';
 import 'package:telsoworld/controllers/main_nav_controller.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
+import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/routes/app_route_observer.dart';
 import 'package:telsoworld/views/ads/ads_view.dart';
+import 'package:telsoworld/views/upload/reel_upload_view.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
-const String _kApiHost = 'telsoworld.com';
+String get _kApiHost => ApiEndpoints.host;
 
 String _normalizeVideoUrl(String rawPath) {
   final trimmed = rawPath.trim();
@@ -31,7 +33,7 @@ String _normalizeVideoUrl(String rawPath) {
       (safePath.startsWith('/videos/') || safePath.startsWith('/ad-videos/'))) {
     safePath = '/storage$safePath';
   }
-  return Uri.https(_kApiHost, safePath).toString();
+  return 'http://$_kApiHost$safePath';
 }
 
 int _toInt(dynamic value, {int fallback = 0}) {
@@ -284,7 +286,7 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware {
 
       _logger.i('Dashboard fetch → token: $token');
 
-      final uri = Uri.parse('https://telsoworld.com/api/reporter/dashboard');
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/dashboard');
       final response = await http
           .get(
             uri,
@@ -525,6 +527,7 @@ class _VideoPageState extends State<_VideoPage>
   bool _hasError = false;
   bool _isLiked = false;
   bool _isLiking = false;
+  bool _isMuted = false;
   int _likesCount = 0;
   int _heartAnimationRun = 0;
 
@@ -613,6 +616,7 @@ class _VideoPageState extends State<_VideoPage>
     );
     await controller.initialize();
     await controller.setLooping(true);
+    await controller.setVolume(_isMuted ? 0.0 : 1.0);
     return controller;
   }
 
@@ -636,7 +640,14 @@ class _VideoPageState extends State<_VideoPage>
     final controller = VideoPlayerController.file(file);
     await controller.initialize();
     await controller.setLooping(true);
+    await controller.setVolume(_isMuted ? 0.0 : 1.0);
     return controller;
+  }
+
+  void _toggleMute() {
+    final nextMuted = !_isMuted;
+    setState(() => _isMuted = nextMuted);
+    _controller?.setVolume(nextMuted ? 0.0 : 1.0);
   }
 
   @override
@@ -673,8 +684,8 @@ class _VideoPageState extends State<_VideoPage>
     try {
       final token = await SessionTokenStore.getToken();
       final endpoint = _isAdsVideo
-          ? 'https://telsoworld.com/api/reporter/adsvideo/view'
-          : 'https://telsoworld.com/api/reporter/normal-video/view';
+          ? '${ApiEndpoints.baseUrl}/reporter/adsvideo/view'
+          : '${ApiEndpoints.baseUrl}/reporter/normal-video/view';
       await http
           .post(
             Uri.parse(endpoint),
@@ -725,8 +736,8 @@ class _VideoPageState extends State<_VideoPage>
     try {
       final token = await SessionTokenStore.getToken();
       final uri = _isAdsVideo
-          ? Uri.parse('https://telsoworld.com/api/reporter/adsvideo/like')
-          : Uri.parse('https://telsoworld.com/api/reporter/normal-video/like');
+          ? Uri.parse('${ApiEndpoints.baseUrl}/reporter/adsvideo/like')
+          : Uri.parse('${ApiEndpoints.baseUrl}/reporter/normal-video/like');
       final response = await http
           .post(
             uri,
@@ -893,6 +904,29 @@ class _VideoPageState extends State<_VideoPage>
               ),
             ),
           ),
+
+          // ── Sound Mute / Unmute button ──
+          if (_initialized)
+            Positioned(
+              right: 14,
+              bottom: 300,
+              child: GestureDetector(
+                onTap: _toggleMute,
+                child: Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Icon(
+                    _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                    color: _isMuted ? Colors.white70 : Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
 
           // ── Right action buttons ──
           Positioned(
@@ -1082,160 +1116,191 @@ class _TopBarState extends State<_TopBar> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: Row(
-        children: [
-          // Live Pulsing Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.45),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF00E676),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                const Text(
-                  'LIVE',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const Spacer(),
-
-          // Feed Segmented Tabs (Following | For You)
-          Row(
-            mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: screenWidth > 20 ? screenWidth - 20 : screenWidth,
+          child: Row(
             children: [
-              GestureDetector(
-                onTap: () => setState(() => _selectedTab = 0),
-                child: Column(
+              // Live Pulsing Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Following',
-                      style: TextStyle(
-                        color: _selectedTab == 0 ? Colors.white : Colors.white54,
-                        fontSize: _selectedTab == 0 ? 15 : 14,
-                        fontWeight: _selectedTab == 0 ? FontWeight.w800 : FontWeight.w600,
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF00E676),
+                        shape: BoxShape.circle,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Container(
-                      width: 24,
-                      height: 2.5,
-                      decoration: BoxDecoration(
-                        color: _selectedTab == 0 ? const Color(0xFFD70F64) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(2),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'LIVE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
+
+              const Spacer(),
+
+              // Feed Segmented Tabs (Following | For You)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => setState(() => _selectedTab = 0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Following',
+                          style: TextStyle(
+                            color: _selectedTab == 0 ? Colors.white : Colors.white54,
+                            fontSize: _selectedTab == 0 ? 14.5 : 13.5,
+                            fontWeight: _selectedTab == 0 ? FontWeight.w800 : FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: _selectedTab == 0 ? 20 : 0,
+                          height: 2.5,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD70F64),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  GestureDetector(
+                    onTap: () => setState(() => _selectedTab = 1),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'For You',
+                          style: TextStyle(
+                            color: _selectedTab == 1 ? Colors.white : Colors.white54,
+                            fontSize: _selectedTab == 1 ? 15.5 : 13.5,
+                            fontWeight: _selectedTab == 1 ? FontWeight.w800 : FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: _selectedTab == 1 ? 20 : 0,
+                          height: 2.5,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD70F64),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const Spacer(),
+
+              // 📹 Quick Upload Video Icon Button
               GestureDetector(
-                onTap: () => setState(() => _selectedTab = 1),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'For You',
-                      style: TextStyle(
-                        color: _selectedTab == 1 ? Colors.white : Colors.white54,
-                        fontSize: _selectedTab == 1 ? 16 : 14,
-                        fontWeight: _selectedTab == 1 ? FontWeight.w800 : FontWeight.w600,
-                      ),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
+                  );
+                },
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.45),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: const Icon(Icons.video_call_rounded, color: Colors.white, size: 17),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Ads Video button
+              GestureDetector(
+                onTap: widget.onAdsTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
                     ),
-                    const SizedBox(height: 3),
-                    Container(
-                      width: 24,
-                      height: 2.5,
-                      decoration: BoxDecoration(
-                        color: _selectedTab == 1 ? const Color(0xFFD70F64) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFD70F64).withOpacity(0.4),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.campaign_rounded, color: Colors.white, size: 13),
+                      SizedBox(width: 3),
+                      Text(
+                        'Ads',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Search Button (Switches to Discovery tab)
+              GestureDetector(
+                onTap: () {
+                  try {
+                    Get.find<MainNavController>().changeTab(1);
+                  } catch (_) {}
+                },
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.45),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: const Icon(Icons.search_rounded, color: Colors.white, size: 16),
                 ),
               ),
             ],
           ),
-
-          const Spacer(),
-
-          // Ads Video button
-          GestureDetector(
-            onTap: widget.onAdsTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFD70F64).withOpacity(0.4),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.campaign_rounded, color: Colors.white, size: 14),
-                  SizedBox(width: 4),
-                  Text(
-                    'Ads',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Search Button (Switches to Discovery tab)
-          GestureDetector(
-            onTap: () {
-              try {
-                Get.find<MainNavController>().changeTab(1);
-              } catch (_) {}
-            },
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.45),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white12),
-              ),
-              child: const Icon(Icons.search_rounded, color: Colors.white, size: 18),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1573,7 +1638,7 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
 
     try {
       final token = await SessionTokenStore.getToken();
-      final uri = Uri.parse('https://telsoworld.com/api/comments');
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/comments');
       final response = await http
           .post(
             uri,
@@ -1634,7 +1699,7 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
     setState(() => _isSending = true);
     try {
       final token = await SessionTokenStore.getToken();
-      final uri = Uri.parse('https://telsoworld.com/api/comments/add');
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/comments/add');
       final response = await http
           .post(
             uri,
@@ -1714,7 +1779,7 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .post(
-            Uri.parse('https://telsoworld.com/api/comments/like'),
+            Uri.parse('${ApiEndpoints.baseUrl}/comments/like'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -1803,7 +1868,7 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .delete(
-            Uri.parse('https://telsoworld.com/api/comments/${comment.id}'),
+            Uri.parse('${ApiEndpoints.baseUrl}/comments/${comment.id}'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -2198,7 +2263,7 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .get(
-            Uri.parse('https://telsoworld.com/api/comments/${widget.commentId}/replies'),
+            Uri.parse('${ApiEndpoints.baseUrl}/comments/${widget.commentId}/replies'),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
