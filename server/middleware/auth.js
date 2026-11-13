@@ -8,7 +8,7 @@ function generateToken(payload) {
 }
 
 // Required authentication
-function authRequired(req, res, next) {
+async function authRequired(req, res, next) {
   const authHeader = req.headers['authorization'];
   if (!authHeader) {
     return res.status(401).json({
@@ -22,7 +22,7 @@ function authRequired(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.findUserById(decoded.id);
+    const user = await db.findUserById(decoded.id);
     if (!user) {
       return res.status(401).json({
         status: false,
@@ -46,14 +46,14 @@ function authRequired(req, res, next) {
 }
 
 // Optional authentication: extracts user if token exists, but doesn't block guests
-function authOptional(req, res, next) {
+async function authOptional(req, res, next) {
   const authHeader = req.headers['authorization'];
   if (authHeader) {
     const parts = authHeader.split(' ');
     const token = parts.length === 2 ? parts[1] : parts[0];
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
-      req.user = db.findUserById(decoded.id);
+      req.user = await db.findUserById(decoded.id);
     } catch (_) {
       req.user = null;
     }

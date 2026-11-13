@@ -77,11 +77,11 @@ const upload = multer({
  * 🎬 GET /api/reporter/dashboard
  * Returns the primary video reels feed for home/explore screen
  */
-router.get('/dashboard', authOptional, (req, res) => {
+router.get('/dashboard', authOptional, async (req, res) => {
   const currentUserId = req.user ? req.user.id : null;
-  const videos = db.getVideos({ type: 'normal', status: 'Approved', currentUserId });
-  const settings = db.data.settings;
-  const user = req.user || db.findUserById(1);
+  const videos = await db.getVideos({ type: 'normal', status: 'Approved', currentUserId });
+  const settings = (await db.getSettings()) || {};
+  const user = req.user || (await db.findUserById(1));
 
   const formattedVideos = videos.map(v => formatVideoResponse(req, v));
 
@@ -104,9 +104,9 @@ router.get('/dashboard', authOptional, (req, res) => {
  * 📢 GET /api/reporter/ads-all-videos
  * Returns promotional & sponsor reels
  */
-router.get('/ads-all-videos', authOptional, (req, res) => {
+router.get('/ads-all-videos', authOptional, async (req, res) => {
   const currentUserId = req.user ? req.user.id : null;
-  const ads = db.getVideos({ type: 'ads', status: 'Approved', currentUserId });
+  const ads = await db.getVideos({ type: 'ads', status: 'Approved', currentUserId });
   const formatted = ads.map(v => formatVideoResponse(req, { ...v, video_type: 'ads' }));
 
   return res.status(200).json({
@@ -120,19 +120,15 @@ router.get('/ads-all-videos', authOptional, (req, res) => {
  * 🎬 GET /api/reporter/video/:id
  * Fetch a single video (including Pending uploads for Studio/Watch preview)
  */
-router.get('/video/:id', authOptional, (req, res) => {
-  const targetId = String(req.params.id);
-  const video = db.data.videos.find(v => String(v.id) === targetId);
+router.get('/video/:id', authOptional, async (req, res) => {
+  const currentUserId = req.user ? req.user.id : null;
+  const video = await db.findVideoById(req.params.id, currentUserId);
   if (!video) {
     return res.status(404).json({ status: false, message: 'Video not found' });
   }
-  const currentUserId = req.user ? req.user.id : null;
-  const liked = currentUserId && Array.isArray(video.liked_by)
-    ? video.liked_by.includes(currentUserId)
-    : false;
   return res.status(200).json({
     status: true,
-    data: formatVideoResponse(req, { ...video, liked, is_liked: liked }),
+    data: formatVideoResponse(req, video),
   });
 });
 
@@ -141,14 +137,14 @@ router.get('/video/:id', authOptional, (req, res) => {
  * 👁️ POST /api/reporter/adsvideo/view
  * Strict Unique View: Counted only once per user / device
  */
-const handleRecordView = (req, res) => {
+const handleRecordView = async (req, res) => {
   const videoId = req.body.video_id || req.body.id || req.query.video_id;
   if (!videoId) {
     return res.status(422).json({ status: false, message: 'video_id is required' });
   }
 
   const viewerIdentifier = req.user ? `user_${req.user.id}` : (req.body.viewer_id || req.ip || req.connection.remoteAddress || 'guest');
-  const result = db.recordVideoView(videoId, viewerIdentifier);
+  const result = await db.recordVideoView(videoId, viewerIdentifier);
   if (!result) {
     return res.status(404).json({ status: false, message: 'Video not found' });
   }
@@ -169,14 +165,14 @@ router.post('/adsvideo/view', authOptional, handleRecordView);
  * ❤️ POST /api/reporter/adsvideo/like
  * Includes 5-Layer Engagement Reward on Ad / Sponsored Posts
  */
-const handleToggleLike = (req, res) => {
+const handleToggleLike = async (req, res) => {
   const videoId = req.body.video_id || req.body.id;
   if (!videoId) {
     return res.status(422).json({ status: false, message: 'video_id is required' });
   }
 
   const userId = req.user ? req.user.id : (req.body.user_id ? parseInt(req.body.user_id, 10) : 1);
-  const result = db.toggleVideoLike(videoId, userId);
+  const result = await db.toggleVideoLike(videoId, userId);
 
   if (!result) {
     return res.status(404).json({ status: false, message: 'Video not found' });
@@ -199,9 +195,9 @@ router.post('/adsvideo/like', authOptional, handleToggleLike);
  * 📊 GET /api/reporter/creator-stats
  * Returns creator channel stats (total likes received, total views, video counts)
  */
-router.get('/creator-stats', authOptional, (req, res) => {
+router.get('/creator-stats', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : (req.query.user_id || 1);
-  const stats = db.getCreatorStats(userId);
+  const stats = await db.getCreatorStats(userId);
   return res.status(200).json({ status: true, data: stats });
 });
 
@@ -209,11 +205,11 @@ router.get('/creator-stats', authOptional, (req, res) => {
  * 👤 GET /api/reporter/profile
  * Returns full profile info for the logged-in user
  */
-router.get('/profile', authOptional, (req, res) => {
+router.get('/profile', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : (req.query.user_id || 1);
-  const user = db.findUserById(userId) || db.getUsers()[0];
-  const stats = db.getCreatorStats(user.id);
-  const wallet = db.getWallet(user.id);
+  const user = (await db.findUserById(userId)) || (await db.getUsers())[0];
+  const stats = await db.getCreatorStats(user.id);
+  const wallet = await db.getWallet(user.id);
 
   return res.status(200).json({
     status: true,
@@ -242,24 +238,25 @@ router.get('/profile', authOptional, (req, res) => {
  * ✏️ PUT /api/reporter/profile
  * Updates creator profile info (name, bio, whatsapp, email)
  */
-router.put('/profile', authOptional, (req, res) => {
+router.put('/profile', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : (req.body.user_id || 1);
-  const user = db.findUserById(userId);
-  if (!user) {
+  const existing = await db.findUserById(userId);
+  if (!existing) {
     return res.status(404).json({ status: false, message: 'User not found' });
   }
 
-  if (req.body.name) user.name = req.body.name.trim();
-  if (req.body.bio) user.bio = req.body.bio.trim();
-  if (req.body.email) user.email = req.body.email.trim();
-  if (req.body.whatsapp) user.whatsapp = req.body.whatsapp.trim();
+  const updates = {};
+  if (req.body.name) updates.name = req.body.name.trim();
+  if (req.body.bio) updates.bio = req.body.bio.trim();
+  if (req.body.email) updates.email = req.body.email.trim();
+  if (req.body.whatsapp) updates.whatsapp = req.body.whatsapp.trim();
 
-  db.save();
+  const updated = await db.updateUser(userId, updates);
 
   return res.status(200).json({
     status: true,
     message: 'Profile updated successfully! ✨',
-    data: user,
+    data: updated,
   });
 });
 
@@ -267,10 +264,10 @@ router.put('/profile', authOptional, (req, res) => {
  * 🔔 GET /api/reporter/notifications
  * Returns notifications for current user with counts and category filter
  */
-router.get('/notifications', authOptional, (req, res) => {
+router.get('/notifications', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : (req.query.user_id || 1);
   const category = req.query.category || 'all';
-  const result = db.getUserNotifications(userId, category);
+  const result = await db.getUserNotifications(userId, category);
   return res.status(200).json({
     status: true,
     data: result.notifications,
@@ -283,15 +280,15 @@ router.get('/notifications', authOptional, (req, res) => {
  * 🔔 POST /api/reporter/notifications/read
  * Marks single notification or all as read
  */
-router.post('/notifications/read', authOptional, (req, res) => {
+router.post('/notifications/read', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : (req.query.user_id || 1);
   const { id, all } = req.body || {};
   if (all) {
-    const updated = db.markAllNotificationsRead(userId);
+    const updated = await db.markAllNotificationsRead(userId);
     return res.status(200).json({ status: true, message: 'All notifications marked as read', updated });
   }
   if (id) {
-    const success = db.markNotificationRead(id, userId);
+    const success = await db.markNotificationRead(id, userId);
     return res.status(200).json({ status: success, message: success ? 'Marked as read' : 'Notification not found' });
   }
   return res.status(400).json({ status: false, message: 'Missing notification id or all flag' });
@@ -301,9 +298,9 @@ router.post('/notifications/read', authOptional, (req, res) => {
  * 🗑️ POST /api/reporter/notifications/clear
  * Clears all notifications for current user
  */
-router.post('/notifications/clear', authOptional, (req, res) => {
+router.post('/notifications/clear', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : (req.query.user_id || 1);
-  db.clearUserNotifications(userId);
+  await db.clearUserNotifications(userId);
   return res.status(200).json({ status: true, message: 'All notifications cleared successfully' });
 });
 
@@ -311,9 +308,9 @@ router.post('/notifications/clear', authOptional, (req, res) => {
  * 🗑️ DELETE /api/reporter/notifications/:id
  * Removes a single notification
  */
-router.delete('/notifications/:id', authOptional, (req, res) => {
+router.delete('/notifications/:id', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : (req.query.user_id || 1);
-  const success = db.deleteNotification(req.params.id, userId);
+  const success = await db.deleteNotification(req.params.id, userId);
   return res.status(200).json({ status: success, message: success ? 'Notification deleted' : 'Notification not found' });
 });
 
@@ -321,9 +318,9 @@ router.delete('/notifications/:id', authOptional, (req, res) => {
  * 📢 POST /api/reporter/create-ad
  * Allows users to create sponsored ad campaigns with 5-layer rewards
  */
-router.post('/create-ad', authOptional, (req, res) => {
-  const user = req.user || db.findUserById(1);
-  const newAd = db.createAd({
+router.post('/create-ad', authOptional, async (req, res) => {
+  const user = req.user || (await db.findUserById(1));
+  const newAd = await db.createAd({
     user_id: user ? user.id : 1,
     name: user ? (user.name || user.username) : 'Sponsored Ad',
     username: user ? user.username : 'sponsored',
@@ -352,7 +349,7 @@ router.post(
   ]),
   async (req, res) => {
     try {
-      const user = req.user || db.findUserById(1);
+      const user = req.user || (await db.findUserById(1));
       const title = req.body.title || req.body.subject || 'New Reel';
       const subject = req.body.subject || req.body.title || '';
       const category = req.body.category || 'Music';
@@ -366,7 +363,7 @@ router.post(
       const thumbFile = (req.files && req.files['thumbnail']) ? req.files['thumbnail'][0] : null;
 
       if (videoFile) {
-        const settings = db.getSettings();
+        const settings = (await db.getSettings()) || {};
         const maxMb = (settings.platform && settings.platform.max_upload_size_mb) || 250;
         if (videoFile.size > maxMb * 1024 * 1024) {
           try { fs.unlinkSync(videoFile.path); } catch(_) {}
@@ -395,7 +392,7 @@ router.post(
       const storedVideoPath = toRelativeMediaPath(videoUrl);
       const storedThumbPath = toRelativeMediaPath(thumbUrl);
 
-      const newVideo = db.createVideo({
+      const newVideo = await db.createVideo({
         user_id: user ? user.id : 1,
         name: user ? (user.name || user.username) : 'Telso Creator',
         username: user ? user.username : 'creator',
@@ -433,9 +430,9 @@ router.post(
 /**
  * 💰 GET /api/reporter/wallet
  */
-router.get('/wallet', authOptional, (req, res) => {
+router.get('/wallet', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : 3; // Default to user 3 (Telso Star Creator) if guest
-  const walletData = db.getWallet(userId);
+  const walletData = await db.getWallet(userId);
 
   return res.status(200).json({
     status: true,
@@ -449,9 +446,9 @@ router.get('/wallet', authOptional, (req, res) => {
 /**
  * 🔗 GET /api/reporter/referral
  */
-router.get('/referral', authOptional, (req, res) => {
+router.get('/referral', authOptional, async (req, res) => {
   const userId = req.user ? req.user.id : 3;
-  const refData = db.getReferral(userId, req.get('host'));
+  const refData = await db.getReferral(userId, req.get('host'));
 
   if (!refData) {
     return res.status(404).json({ status: false, message: 'User not found' });
@@ -466,11 +463,10 @@ router.get('/referral', authOptional, (req, res) => {
 /**
  * 🎥 GET /api/reporter/my-videos
  */
-router.get('/my-videos', authOptional, (req, res) => {
+router.get('/my-videos', authOptional, async (req, res) => {
   const currentUserId = req.user ? req.user.id : 1;
-  const userVideos = db.data.videos
-    .filter(v => v.user_id === currentUserId)
-    .map(v => formatVideoResponse(req, v));
+  const videos = await db.getUserVideos(currentUserId);
+  const userVideos = videos.map(v => formatVideoResponse(req, v));
   return res.status(200).json({
     status: true,
     data: userVideos,
@@ -481,9 +477,9 @@ router.get('/my-videos', authOptional, (req, res) => {
 /**
  * 🌐 GET /api/reporter/web-links
  */
-router.get('/web-links', authOptional, (req, res) => {
+router.get('/web-links', authOptional, async (req, res) => {
   const currentUserId = req.user ? req.user.id : null;
-  const links = db.getWebLinks(currentUserId);
+  const links = await db.getWebLinks(currentUserId);
   return res.status(200).json({
     status: true,
     data: links,
@@ -494,9 +490,9 @@ router.get('/web-links', authOptional, (req, res) => {
 /**
  * ➕ POST /api/reporter/web-links
  */
-router.post('/web-links', authOptional, (req, res) => {
-  const user = req.user || db.findUserById(1);
-  const newLink = db.createWebLink({
+router.post('/web-links', authOptional, async (req, res) => {
+  const user = req.user || (await db.findUserById(1));
+  const newLink = await db.createWebLink({
     user_id: user ? user.id : 1,
     subject: req.body.subject,
     name: req.body.name,
@@ -518,8 +514,8 @@ router.post('/web-links', authOptional, (req, res) => {
  * 🎂 GET /api/reporter/today-birthdays
  * Public endpoint for web visitors & creators to view today's celebrating creators
  */
-router.get('/today-birthdays', (req, res) => {
-  const birthdays = db.getTodayBirthdays().map(u => ({
+router.get('/today-birthdays', async (req, res) => {
+  const birthdays = (await db.getTodayBirthdays()).map(u => ({
     id: u.id,
     name: u.name,
     username: u.username,

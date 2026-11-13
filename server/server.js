@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const reporterRoutes = require('./routes/reporter');
 const commentRoutes = require('./routes/comments');
 const adminRoutes = require('./routes/admin');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5050;
@@ -53,13 +54,24 @@ app.get(['/download/app-debug.apk', '/download/app.apk', '/download/telso.apk'],
   }
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: true,
-    service: 'Telso World API Backend',
-    version: '1.0.0',
-    timestamp: new Date().toISOString(),
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    await db.pool.query('SELECT 1');
+    res.json({
+      status: true,
+      service: 'Telso World API Backend',
+      database: 'PostgreSQL',
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: false,
+      service: 'Telso World API Backend',
+      database: 'PostgreSQL (disconnected)',
+      error: err.message,
+    });
+  }
 });
 
 // 404 handler for unknown APIs
@@ -82,16 +94,24 @@ function getLocalIp() {
   return 'localhost';
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  const localIp = getLocalIp();
-  console.log('====================================================');
-  console.log(`🚀 Telso World API Server is running on PORT: ${PORT}`);
-  console.log(`💻 Local Admin Panel : http://localhost:${PORT}/admin`);
-  console.log(`🌐 Network Admin      : http://${localIp}:${PORT}/admin`);
-  console.log('----------------------------------------------------');
-  console.log(`📱 Flutter Base URL configuration:`);
-  console.log(`   • Android Emulator  : http://10.0.2.2:${PORT}/api`);
-  console.log(`   • iOS / macOS / Web : http://localhost:${PORT}/api`);
-  console.log(`   • Physical Devices  : http://${localIp}:${PORT}/api`);
-  console.log('====================================================');
-});
+db.init()
+  .then(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+      const localIp = getLocalIp();
+      console.log('====================================================');
+      console.log(`🚀 Telso World API Server is running on PORT: ${PORT}`);
+      console.log(`🐘 PostgreSQL Database : Connected`);
+      console.log(`💻 Local Admin Panel : http://localhost:${PORT}/admin`);
+      console.log(`🌐 Network Admin      : http://${localIp}:${PORT}/admin`);
+      console.log('----------------------------------------------------');
+      console.log(`📱 Flutter Base URL configuration:`);
+      console.log(`   • Android Emulator  : http://10.0.2.2:${PORT}/api`);
+      console.log(`   • iOS / macOS / Web : http://localhost:${PORT}/api`);
+      console.log(`   • Physical Devices  : http://${localIp}:${PORT}/api`);
+      console.log('====================================================');
+    });
+  })
+  .catch((err) => {
+    console.error('❌ Failed to initialize PostgreSQL database:', err);
+    process.exit(1);
+  });

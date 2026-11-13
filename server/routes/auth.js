@@ -77,7 +77,7 @@ router.post('/verify-otp', (req, res) => {
  * 🔍 GET /api/reporter/check-username
  * Validates unique Instagram-style handle availability
  */
-router.get('/check-username', (req, res) => {
+router.get('/check-username', async (req, res) => {
   const raw = req.query.username || '';
   const clean = raw.trim().toLowerCase().replace(/^@/, '');
 
@@ -98,7 +98,7 @@ router.get('/check-username', (req, res) => {
     });
   }
 
-  const existing = db.findUserByUsername(clean);
+  const existing = await db.findUserByUsername(clean);
   if (existing) {
     return res.status(200).json({
       status: true,
@@ -122,7 +122,7 @@ router.get('/check-username', (req, res) => {
  * username (Unique like Instagram), mobile_no, password, whatsapp_no, dob (Happy birthday date - Mandatory!),
  * email, state, district, referral_code, user_type
  */
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   try {
     const {
       name,
@@ -154,7 +154,7 @@ router.post('/register', (req, res) => {
       });
     }
 
-    const existingUser = db.findUserByUsername(rawUsername);
+    const existingUser = await db.findUserByUsername(rawUsername);
     if (existingUser) {
       return res.status(409).json({
         status: false,
@@ -187,7 +187,7 @@ router.post('/register', (req, res) => {
     }
 
     // 5. Check if mobile already registered
-    const existingPhone = db.getUsers().find(u => u.mobile_no === finalMobile);
+    const existingPhone = await db.findUserByMobile(finalMobile);
     if (existingPhone) {
       return res.status(409).json({
         status: false,
@@ -196,7 +196,7 @@ router.post('/register', (req, res) => {
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10);
-    const newUser = db.createUser({
+    const newUser = await db.createUser({
       name: name || rawUsername,
       username: rawUsername,
       email: email || `${rawUsername}@telsoworld.com`,
@@ -213,7 +213,7 @@ router.post('/register', (req, res) => {
     const token = generateToken({ id: newUser.id, username: newUser.username, role: newUser.role });
 
     // 🔔 Send Welcome Notification to newly registered creator
-    db.addUserNotification(newUser.id, {
+    await db.addUserNotification(newUser.id, {
       title: '🎁 Welcome Bonus Credited!',
       message: `Welcome to Telso World, ${newUser.name || newUser.username}! ₹50 joining bonus has been credited to your wallet.`,
       type: 'earning',
@@ -260,7 +260,7 @@ router.post('/register', (req, res) => {
 /**
  * 🔑 POST /api/reporter/login
  */
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { email, username, mobile, mobile_no, password } = req.body;
     const identifier = email || username || mobile || mobile_no;
@@ -272,7 +272,7 @@ router.post('/login', (req, res) => {
       });
     }
 
-    const user = db.findUserByEmailOrPhone(identifier);
+    const user = await db.findUserByEmailOrPhone(identifier);
     if (!user) {
       return res.status(401).json({
         status: false,
@@ -342,9 +342,9 @@ router.post('/logout', (req, res) => {
 /**
  * 👤 GET /api/reporter/profile
  */
-router.get('/profile', authRequired, (req, res) => {
+router.get('/profile', authRequired, async (req, res) => {
   const { password, ...safeUser } = req.user;
-  const wallet = db.getWallet(req.user.id);
+  const wallet = await db.getWallet(req.user.id);
 
   return res.status(200).json({
     status: true,

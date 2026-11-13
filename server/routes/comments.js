@@ -8,14 +8,14 @@ const router = express.Router();
  * 💬 GET /api/comments
  * Accepts query param `video_id`
  */
-router.get('/', authOptional, (req, res) => {
+router.get('/', authOptional, async (req, res) => {
   const videoId = req.query.video_id || req.query.videoId;
   if (!videoId) {
     return res.status(422).json({ status: false, message: 'video_id is required' });
   }
 
   const currentUserId = req.user ? req.user.id : null;
-  const comments = db.getComments(videoId, currentUserId);
+  const comments = await db.getComments(videoId, currentUserId);
 
   return res.status(200).json({
     status: true,
@@ -28,7 +28,7 @@ router.get('/', authOptional, (req, res) => {
  * ✍️ POST /api/comments/add and POST /api/comments
  * Accepts body: { video_id, comment, parent_id? }
  */
-const handleAddComment = (req, res) => {
+const handleAddComment = async (req, res) => {
   const { video_id, comment, content, parent_id } = req.body;
   const commentText = comment || content;
 
@@ -39,8 +39,8 @@ const handleAddComment = (req, res) => {
     });
   }
 
-  const user = req.user || db.findUserById(req.body.user_id || 1);
-  const resData = db.createComment({
+  const user = req.user || (await db.findUserById(req.body.user_id || 1));
+  const resData = await db.createComment({
     video_id,
     user_id: user ? user.id : 1,
     user_name: user ? (user.name || user.username) : 'Creator',
@@ -65,14 +65,14 @@ router.post('/', authOptional, handleAddComment);
  * ❤️ POST /api/comments/like
  * Accepts body: { comment_id }
  */
-router.post('/like', authOptional, (req, res) => {
+router.post('/like', authOptional, async (req, res) => {
   const commentId = req.body.comment_id || req.body.id;
   if (!commentId) {
     return res.status(422).json({ status: false, message: 'comment_id is required' });
   }
 
   const userId = req.user ? req.user.id : 1;
-  const result = db.toggleCommentLike(commentId, userId);
+  const result = await db.toggleCommentLike(commentId, userId);
 
   if (!result) {
     return res.status(404).json({ status: false, message: 'Comment not found' });
@@ -89,8 +89,8 @@ router.post('/like', authOptional, (req, res) => {
 /**
  * 🗑️ DELETE /api/comments/:id
  */
-router.delete('/:id', authOptional, (req, res) => {
-  const success = db.deleteComment(req.params.id);
+router.delete('/:id', authOptional, async (req, res) => {
+  const success = await db.deleteComment(req.params.id);
   if (!success) {
     return res.status(404).json({ status: false, message: 'Comment not found' });
   }
@@ -100,9 +100,9 @@ router.delete('/:id', authOptional, (req, res) => {
 /**
  * 🔁 GET /api/comments/:id/replies
  */
-router.get('/:id/replies', authOptional, (req, res) => {
+router.get('/:id/replies', authOptional, async (req, res) => {
   const currentUserId = req.user ? req.user.id : null;
-  const replies = db.getCommentReplies(req.params.id, currentUserId);
+  const replies = await db.getCommentReplies(req.params.id, currentUserId);
   return res.status(200).json({ status: true, data: replies, replies });
 });
 
