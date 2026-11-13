@@ -14,10 +14,16 @@ class ApiEndpoints {
   /// Default server port
   static const int port = 5050;
 
-  /// Wi-Fi LAN IP of host machine for wireless debugging & physical devices
+  /// Production Domain URL
+  static const String productionDomain = 'telsoworld.com';
+
+  /// Toggle this to false if you want to test against local machine IP
+  static const bool useProductionServer = true;
+
+  /// Wi-Fi LAN IP of host machine for local wireless debugging
   static const String currentLanIp = '10.146.210.61';
 
-  /// Custom host override (e.g. '10.146.210.61:5050' or '10.0.2.2:5050')
+  /// Custom host override (e.g. 'telsoworld.com' or '10.146.210.61:5050')
   static String? customHost;
 
   /// Dynamic host resolution
@@ -25,10 +31,12 @@ class ApiEndpoints {
     if (customHost != null && customHost!.isNotEmpty) {
       return customHost!;
     }
+    if (useProductionServer) {
+      return productionDomain;
+    }
     if (kIsWeb) return 'localhost:$port';
     try {
       if (Platform.isAndroid) {
-        // Automatically connects over Wi-Fi when testing on physical device via wireless debugging
         return '$currentLanIp:$port';
       }
     } catch (_) {}
@@ -36,7 +44,12 @@ class ApiEndpoints {
   }
 
   /// Dynamic API Base URL
-  static String get baseUrl => 'http://$host/api';
+  static String get baseUrl {
+    if (useProductionServer && (customHost == null || customHost!.isEmpty)) {
+      return 'https://$productionDomain/api';
+    }
+    return 'http://$host/api';
+  }
 
   /// Helper to build full URL from path
   static String url(String path) {
