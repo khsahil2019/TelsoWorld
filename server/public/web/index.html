@@ -127,37 +127,45 @@
     <div class="flex items-center space-x-1.5 sm:space-x-2.5">
       <!-- 1-Click Demo Logins Dropdown -->
       <div class="relative">
-        <button onclick="toggleDemoDropdown()" class="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-yt-hover hover:bg-yt-pillHover border border-yt-border text-xs font-semibold text-amber-300 transition" title="1-Click Demo Logins">
+        <button onclick="toggleDemoDropdown()"
+          class="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-yt-hover hover:bg-yt-pillHover border border-yt-border text-xs font-semibold text-amber-300 transition"
+          title="1-Click Demo Logins">
           <i data-lucide="users" class="w-3.5 h-3.5"></i>
           <span>Demo Users</span>
           <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
         </button>
-        <div id="demoDropdownMenu" class="hidden absolute right-0 mt-2 w-64 bg-yt-card border border-yt-border rounded-2xl shadow-2xl p-2 z-50 text-xs space-y-1">
-          <p class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">1-Click Test Creator Logins</p>
-          <button onclick="quickLogin('aarav_music')" class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-yt-hover text-left transition">
+        <div id="demoDropdownMenu"
+          class="hidden absolute right-0 mt-2 w-64 bg-yt-card border border-yt-border rounded-2xl shadow-2xl p-2 z-50 text-xs space-y-1">
+          <p class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">1-Click Test Creator Logins
+          </p>
+          <button onclick="quickLogin('aarav_music')"
+            class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-yt-hover text-left transition">
             <div>
               <p class="font-bold text-white">Aarav Sharma</p>
               <p class="text-[10px] text-slate-400">@aarav_music &bull; pass: password123</p>
             </div>
             <span class="text-[10px] font-bold text-yt-pink bg-yt-pink/10 px-2 py-0.5 rounded-md">Log in</span>
           </button>
-          <button onclick="quickLogin('priya_tunes')" class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-yt-hover text-left transition">
+          <button onclick="quickLogin('priya_tunes')"
+            class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-yt-hover text-left transition">
             <div>
               <p class="font-bold text-white">Priya Verma</p>
               <p class="text-[10px] text-slate-400">@priya_tunes &bull; pass: password123</p>
             </div>
             <span class="text-[10px] font-bold text-yt-pink bg-yt-pink/10 px-2 py-0.5 rounded-md">Log in</span>
           </button>
-          <button onclick="quickLogin('bhojpuri_king')" class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-yt-hover text-left transition">
+          <button onclick="quickLogin('bhojpuri_king')"
+            class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-yt-hover text-left transition">
             <div>
               <p class="font-bold text-white">Manoj Tiwari</p>
               <p class="text-[10px] text-slate-400">@bhojpuri_king &bull; pass: password123</p>
             </div>
             <span class="text-[10px] font-bold text-yt-pink bg-yt-pink/10 px-2 py-0.5 rounded-md">Log in</span>
           </button>
-          <button onclick="quickLogin('reporter')" class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-yt-hover text-left transition">
+          <button onclick="quickLogin('reporter')"
+            class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-yt-hover text-left transition">
             <div>
-              <p class="font-bold text-white">Telso Star Creator</p>
+              <p class="font-bold text-white">Telso Starr</p>
               <p class="text-[10px] text-slate-400">@reporter &bull; pass: password123</p>
             </div>
             <span class="text-[10px] font-bold text-yt-pink bg-yt-pink/10 px-2 py-0.5 rounded-md">Log in</span>
@@ -166,7 +174,8 @@
       </div>
 
       <!-- Mobile Search Icon Button -->
-      <button onclick="toggleMobileSearchBar()" class="sm:hidden p-2 rounded-full hover:bg-yt-hover text-slate-200 hover:text-white transition" title="Search">
+      <button onclick="toggleMobileSearchBar()"
+        class="sm:hidden p-2 rounded-full hover:bg-yt-hover text-slate-200 hover:text-white transition" title="Search">
         <i data-lucide="search" class="w-5 h-5"></i>
       </button>
 
@@ -178,9 +187,12 @@
       </button>
 
       <!-- Notifications Bell Icon with Dynamic Unread Badge -->
-      <button onclick="toggleNotificationsDrawer()" class="relative p-2 rounded-full hover:bg-yt-hover text-slate-200 hover:text-white transition" title="Notifications">
+      <button onclick="toggleNotificationsDrawer()"
+        class="relative p-2 rounded-full hover:bg-yt-hover text-slate-200 hover:text-white transition"
+        title="Notifications">
         <i data-lucide="bell" class="w-5 h-5"></i>
-        <span id="headerNotifBadge" class="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full leading-tight">
+        <span id="headerNotifBadge"
+          class="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full leading-tight">
           8
         </span>
       </button>
@@ -193,9 +205,13 @@
   </header>
 
   <!-- Mobile Expandable Search Bar -->
-  <div id="mobileSearchBar" class="hidden sm:hidden bg-yt-dark border-b border-yt-border px-4 py-2.5 flex items-center space-x-2 z-30">
-    <div class="flex items-center flex-1 bg-yt-input border border-yt-border rounded-full overflow-hidden px-3 py-1.5 focus-within:border-blue-500">
-      <input type="text" id="mobileSearchInput" onkeyup="if(event.key==='Enter') executeMobileSearch()" placeholder="Search reels, creators, music..." class="w-full bg-transparent text-xs text-white placeholder-slate-400 focus:outline-none">
+  <div id="mobileSearchBar"
+    class="hidden sm:hidden bg-yt-dark border-b border-yt-border px-4 py-2.5 flex items-center space-x-2 z-30">
+    <div
+      class="flex items-center flex-1 bg-yt-input border border-yt-border rounded-full overflow-hidden px-3 py-1.5 focus-within:border-blue-500">
+      <input type="text" id="mobileSearchInput" onkeyup="if(event.key==='Enter') executeMobileSearch()"
+        placeholder="Search reels, creators, music..."
+        class="w-full bg-transparent text-xs text-white placeholder-slate-400 focus:outline-none">
       <button onclick="executeMobileSearch()" class="text-slate-400 hover:text-white pl-2">
         <i data-lucide="search" class="w-4 h-4"></i>
       </button>
@@ -206,7 +222,8 @@
   </div>
 
   <!-- Mobile Sidebar Backdrop -->
-  <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden md:hidden"></div>
+  <div id="sidebarBackdrop" onclick="toggleSidebar()"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden md:hidden"></div>
 
   <!-- ======================================================== -->
   <!-- 🧭 MAIN BODY CONTAINER WITH YOUTUBE SIDEBAR -->
@@ -262,7 +279,8 @@
               <i data-lucide="bell" class="w-4 h-4 text-amber-400"></i>
               <span>Notifications</span>
             </div>
-            <span id="sidebarNotifBadge" class="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">8</span>
+            <span id="sidebarNotifBadge"
+              class="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">8</span>
           </button>
           <button onclick="openEarningGuideModal()"
             class="w-full flex items-center space-x-4 px-3 py-2 rounded-xl text-sm font-medium text-slate-300 hover:bg-yt-hover hover:text-white transition">
@@ -311,7 +329,8 @@
         <p class="text-[11px] leading-relaxed">Download Telso World mobile app for full offline support, high-def camera
           trimming, and creator rewards.</p>
         <div class="pt-1">
-          <a href="/download/app-debug.apk" download="TelsoWorld.apk" class="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 rounded-xl bg-gradient-to-r from-yt-pink to-yt-purple text-white font-bold text-xs shadow-md hover:opacity-90 transition">
+          <a href="/download/app-debug.apk" download="TelsoWorld.apk"
+            class="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 rounded-xl bg-gradient-to-r from-yt-pink to-yt-purple text-white font-bold text-xs shadow-md hover:opacity-90 transition">
             <i data-lucide="download" class="w-3.5 h-3.5"></i>
             <span>Download APK</span>
           </a>
@@ -400,7 +419,7 @@
         </div>
       </section>
 
-      
+
 
       <!-- ======================================================== -->
       <!-- VIEW 2: YOUTUBE WATCH PAGE (/watch?v=...) -->
@@ -530,7 +549,7 @@
         </div>
       </section>
 
-      
+
 
       <!-- ======================================================== -->
       <!-- VIEW 3: YOUTUBE SHORTS VERTICAL PLAYER (/shorts) -->
@@ -540,12 +559,14 @@
           <!-- 9:16 Vertical Video Frame -->
           <div
             class="relative w-full aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-2xl border border-yt-border group">
-            <video id="shortsPlayer" class="w-full h-full object-cover cursor-pointer" loop playsinline onclick="toggleShortsPlayback()"></video>
+            <video id="shortsPlayer" class="w-full h-full object-cover cursor-pointer" loop playsinline
+              onclick="toggleShortsPlayback()"></video>
 
             <!-- Floating Tap to Unmute Overlay -->
             <div id="shortsUnmuteOverlay" onclick="unmuteShortsVideo()"
               class="hidden absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-sm cursor-pointer transition">
-              <div class="bg-yt-pink hover:bg-yt-pink/90 text-white px-5 py-2.5 rounded-full font-black text-xs flex items-center space-x-2 shadow-2xl animate-pulse border border-white/30">
+              <div
+                class="bg-yt-pink hover:bg-yt-pink/90 text-white px-5 py-2.5 rounded-full font-black text-xs flex items-center space-x-2 shadow-2xl animate-pulse border border-white/30">
                 <i data-lucide="volume-2" class="w-4 h-4"></i>
                 <span>Tap for Sound 🔊</span>
               </div>
@@ -611,7 +632,8 @@
             </div>
 
             <!-- YouTube Shorts Comments Bottom Sheet / Drawer -->
-            <div id="shortsCommentsDrawer" class="absolute inset-x-0 bottom-0 h-[68%] bg-yt-card/95 backdrop-blur-md rounded-t-3xl border-t border-yt-border shadow-2xl flex flex-col z-30 hidden transition-all">
+            <div id="shortsCommentsDrawer"
+              class="absolute inset-x-0 bottom-0 h-[68%] bg-yt-card/95 backdrop-blur-md rounded-t-3xl border-t border-yt-border shadow-2xl flex flex-col z-30 hidden transition-all">
               <div class="p-3 border-b border-yt-border flex items-center justify-between">
                 <div class="flex items-center space-x-2">
                   <h4 class="font-bold text-xs text-white">Comments</h4>
@@ -630,7 +652,8 @@
                 <input type="text" id="shortsCommentInput" placeholder="Add a public comment..."
                   onkeydown="if(event.key==='Enter') submitShortsComment()"
                   class="flex-1 bg-yt-input border border-yt-border rounded-full px-3 py-1.5 text-xs text-white focus:outline-none focus:border-yt-pink">
-                <button onclick="submitShortsComment()" class="p-2 rounded-full bg-yt-pink text-white hover:opacity-90 transition">
+                <button onclick="submitShortsComment()"
+                  class="p-2 rounded-full bg-yt-pink text-white hover:opacity-90 transition">
                   <i data-lucide="send" class="w-3.5 h-3.5"></i>
                 </button>
               </div>
@@ -638,7 +661,8 @@
           </div>
 
           <!-- YouTube Right Action Rail (Responsive: floats on mobile, beside on desktop) -->
-          <div class="absolute right-2 sm:right-auto sm:relative bottom-16 sm:bottom-auto ml-0 sm:ml-4 flex flex-col items-center space-y-3 sm:space-y-4 text-white z-20">
+          <div
+            class="absolute right-2 sm:right-auto sm:relative bottom-16 sm:bottom-auto ml-0 sm:ml-4 flex flex-col items-center space-y-3 sm:space-y-4 text-white z-20">
             <!-- Like -->
             <div class="flex flex-col items-center">
               <button onclick="toggleShortsLike()" id="btnShortsLike"
@@ -650,7 +674,8 @@
 
             <!-- Dislike -->
             <div class="flex flex-col items-center">
-              <button class="p-2.5 sm:p-3 rounded-full bg-black/50 sm:bg-yt-hover backdrop-blur-md hover:bg-yt-pillHover transition">
+              <button
+                class="p-2.5 sm:p-3 rounded-full bg-black/50 sm:bg-yt-hover backdrop-blur-md hover:bg-yt-pillHover transition">
                 <i data-lucide="thumbs-down" class="w-5 h-5"></i>
               </button>
               <span class="text-[11px] font-semibold mt-1 text-slate-400 drop-shadow">Dislike</span>
@@ -667,7 +692,8 @@
 
             <!-- Share -->
             <div class="flex flex-col items-center">
-              <button onclick="shareShortVideo()" class="p-2.5 sm:p-3 rounded-full bg-black/50 sm:bg-yt-hover backdrop-blur-md hover:bg-yt-pillHover transition">
+              <button onclick="shareShortVideo()"
+                class="p-2.5 sm:p-3 rounded-full bg-black/50 sm:bg-yt-hover backdrop-blur-md hover:bg-yt-pillHover transition">
                 <i data-lucide="share-2" class="w-5 h-5"></i>
               </button>
               <span class="text-[11px] font-semibold mt-1 text-slate-400 drop-shadow">Share</span>
@@ -675,11 +701,13 @@
 
             <!-- Prev / Next Reel navigation arrows -->
             <div class="flex flex-col space-y-2 pt-2">
-              <button onclick="navigateShort(-1)" class="p-2 sm:p-2.5 rounded-full bg-black/50 sm:bg-white/10 backdrop-blur-md hover:bg-white/20 text-white"
+              <button onclick="navigateShort(-1)"
+                class="p-2 sm:p-2.5 rounded-full bg-black/50 sm:bg-white/10 backdrop-blur-md hover:bg-white/20 text-white"
                 title="Previous Short">
                 <i data-lucide="chevron-up" class="w-5 h-5"></i>
               </button>
-              <button onclick="navigateShort(1)" class="p-2 sm:p-2.5 rounded-full bg-black/50 sm:bg-white/10 backdrop-blur-md hover:bg-white/20 text-white"
+              <button onclick="navigateShort(1)"
+                class="p-2 sm:p-2.5 rounded-full bg-black/50 sm:bg-white/10 backdrop-blur-md hover:bg-white/20 text-white"
                 title="Next Short">
                 <i data-lucide="chevron-down" class="w-5 h-5"></i>
               </button>
@@ -688,7 +716,7 @@
         </div>
       </section>
 
-      
+
 
       <!-- ======================================================== -->
       <!-- VIEW 4: YOUTUBE CREATOR STUDIO (/studio) -->
@@ -750,7 +778,7 @@
         </div>
       </section>
 
-      
+
 
       <!-- ======================================================== -->
       <!-- VIEW 5: WALLET & EARNINGS HUB (/wallet) -->
@@ -792,29 +820,37 @@
         </div>
       </section>
 
-      
 
-<!-- ======================================================== -->
+
+      <!-- ======================================================== -->
       <!-- VIEW 6: 👤 CREATOR PROFILE HUB (/profile) -->
       <!-- Recreates the Flutter profile_view.dart experience! -->
       <!-- ======================================================== -->
       <section id="view-profile" class="hidden p-4 sm:p-8 max-w-5xl mx-auto space-y-6">
 
         <!-- Top Profile Banner & Card -->
-        <div class="relative bg-gradient-to-b from-yt-pink/20 via-yt-card to-yt-card border border-yt-border rounded-3xl p-6 sm:p-8 overflow-hidden shadow-2xl">
+        <div
+          class="relative bg-gradient-to-b from-yt-pink/20 via-yt-card to-yt-card border border-yt-border rounded-3xl p-6 sm:p-8 overflow-hidden shadow-2xl">
           <!-- Ambient Glow Effect -->
-          <div class="absolute -top-24 -left-24 w-72 h-72 bg-yt-pink/20 rounded-full blur-3xl pointer-events-none"></div>
-          <div class="absolute -top-24 -right-24 w-72 h-72 bg-yt-purple/20 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute -top-24 -left-24 w-72 h-72 bg-yt-pink/20 rounded-full blur-3xl pointer-events-none">
+          </div>
+          <div class="absolute -top-24 -right-24 w-72 h-72 bg-yt-purple/20 rounded-full blur-3xl pointer-events-none">
+          </div>
 
-          <div class="relative z-10 flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6 text-center sm:text-left">
+          <div
+            class="relative z-10 flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6 text-center sm:text-left">
             <!-- Avatar with Verified Badge -->
             <div class="relative">
-              <div id="profileAvatarRing" class="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-yt-pink via-pink-400 to-amber-300 shadow-xl shadow-yt-pink/30 flex items-center justify-center">
-                <div id="profileAvatarInitials" class="w-full h-full rounded-full bg-[#181822] flex items-center justify-center text-white text-3xl font-black">
+              <div id="profileAvatarRing"
+                class="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-yt-pink via-pink-400 to-amber-300 shadow-xl shadow-yt-pink/30 flex items-center justify-center">
+                <div id="profileAvatarInitials"
+                  class="w-full h-full rounded-full bg-[#181822] flex items-center justify-center text-white text-3xl font-black">
                   TW
                 </div>
               </div>
-              <div class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-yt-pink flex items-center justify-center text-white text-xs shadow-md" title="Verified Creator">
+              <div
+                class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-yt-pink flex items-center justify-center text-white text-xs shadow-md"
+                title="Verified Creator">
                 <i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>
               </div>
             </div>
@@ -823,29 +859,35 @@
             <div class="flex-1 space-y-2">
               <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                 <h2 id="profileNameDisplay" class="text-2xl font-black text-white">Telso Creator</h2>
-                <span class="bg-yt-pink/20 text-yt-pink border border-yt-pink/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center space-x-1">
+                <span
+                  class="bg-yt-pink/20 text-yt-pink border border-yt-pink/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center space-x-1">
                   <span>Verified Creator</span>
                 </span>
               </div>
               <p id="profileHandleDisplay" class="text-xs text-slate-400 font-mono">@reporter &bull; ID: #1</p>
               <p id="profileBioDisplay" class="text-xs text-slate-300 max-w-xl leading-relaxed">
-                Official Creator on Telso World 🎵 Singer, Music Producer & Live Performer. Sharing daily reels, classical fusion & folk music.
+                Official Creator on Telso World 🎵 Singer, Music Producer & Live Performer. Sharing daily reels,
+                classical fusion & folk music.
               </p>
 
               <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-2">
-                <button onclick="openEditProfileModal()" class="px-4 py-2 rounded-xl bg-white hover:bg-slate-200 text-black text-xs font-bold transition flex items-center space-x-1.5 shadow">
+                <button onclick="openEditProfileModal()"
+                  class="px-4 py-2 rounded-xl bg-white hover:bg-slate-200 text-black text-xs font-bold transition flex items-center space-x-1.5 shadow">
                   <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                   <span>Edit Profile</span>
                 </button>
-                <button onclick="shareProfileLink()" class="px-4 py-2 rounded-xl bg-yt-hover hover:bg-yt-pillHover text-white text-xs font-semibold border border-yt-border transition flex items-center space-x-1.5">
+                <button onclick="shareProfileLink()"
+                  class="px-4 py-2 rounded-xl bg-yt-hover hover:bg-yt-pillHover text-white text-xs font-semibold border border-yt-border transition flex items-center space-x-1.5">
                   <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
                   <span>Share Profile</span>
                 </button>
-                <button onclick="openUploadModal()" class="px-4 py-2 rounded-xl bg-yt-pink hover:bg-yt-pink/90 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-yt-pink/30">
+                <button onclick="openUploadModal()"
+                  class="px-4 py-2 rounded-xl bg-yt-pink hover:bg-yt-pink/90 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-yt-pink/30">
                   <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                   <span>Upload Reel</span>
                 </button>
-                <button onclick="logoutWebUser()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-semibold border border-rose-500/30 transition flex items-center space-x-1.5">
+                <button onclick="logoutWebUser()"
+                  class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-semibold border border-rose-500/30 transition flex items-center space-x-1.5">
                   <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
                   <span>Logout</span>
                 </button>
@@ -887,7 +929,8 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <!-- 1. Wallet Card -->
-            <div onclick="navigate('wallet')" class="p-4 rounded-2xl bg-gradient-to-br from-[#2A1522] to-yt-card border border-yt-pink/30 hover:border-yt-pink cursor-pointer transition space-y-2 group">
+            <div onclick="navigate('wallet')"
+              class="p-4 rounded-2xl bg-gradient-to-br from-[#2A1522] to-yt-card border border-yt-pink/30 hover:border-yt-pink cursor-pointer transition space-y-2 group">
               <div class="w-9 h-9 rounded-xl bg-yt-pink/20 text-yt-pink flex items-center justify-center font-bold">
                 <i data-lucide="wallet" class="w-5 h-5"></i>
               </div>
@@ -901,7 +944,8 @@
             </div>
 
             <!-- 2. Video Studio -->
-            <div onclick="navigate('studio')" class="p-4 rounded-2xl bg-gradient-to-br from-[#2A1F15] to-yt-card border border-amber-500/30 hover:border-amber-400 cursor-pointer transition space-y-2 group">
+            <div onclick="navigate('studio')"
+              class="p-4 rounded-2xl bg-gradient-to-br from-[#2A1F15] to-yt-card border border-amber-500/30 hover:border-amber-400 cursor-pointer transition space-y-2 group">
               <div class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
                 <i data-lucide="clapperboard" class="w-5 h-5"></i>
               </div>
@@ -915,7 +959,8 @@
             </div>
 
             <!-- 3. Web Link Portals -->
-            <div onclick="shareReferralWhatsApp()" class="p-4 rounded-2xl bg-gradient-to-br from-[#132228] to-yt-card border border-sky-500/30 hover:border-sky-400 cursor-pointer transition space-y-2 group">
+            <div onclick="shareReferralWhatsApp()"
+              class="p-4 rounded-2xl bg-gradient-to-br from-[#132228] to-yt-card border border-sky-500/30 hover:border-sky-400 cursor-pointer transition space-y-2 group">
               <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold">
                 <i data-lucide="gift" class="w-5 h-5"></i>
               </div>
@@ -929,8 +974,10 @@
             </div>
 
             <!-- 4. Promotion Ads -->
-            <div onclick="openEarningGuideModal()" class="p-4 rounded-2xl bg-gradient-to-br from-[#1F1728] to-yt-card border border-purple-500/30 hover:border-purple-400 cursor-pointer transition space-y-2 group">
-              <div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
+            <div onclick="openEarningGuideModal()"
+              class="p-4 rounded-2xl bg-gradient-to-br from-[#1F1728] to-yt-card border border-purple-500/30 hover:border-purple-400 cursor-pointer transition space-y-2 group">
+              <div
+                class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
                 <i data-lucide="megaphone" class="w-5 h-5"></i>
               </div>
               <div>
@@ -947,15 +994,18 @@
         <!-- Profile Tabs: Reels / Uploaded Videos / Account Info -->
         <div class="space-y-4">
           <div class="border-b border-yt-border flex items-center space-x-6 text-sm font-semibold">
-            <button onclick="switchProfileTab('reels')" id="profTabReels" class="py-3 text-white border-b-2 border-yt-pink transition flex items-center space-x-1.5">
+            <button onclick="switchProfileTab('reels')" id="profTabReels"
+              class="py-3 text-white border-b-2 border-yt-pink transition flex items-center space-x-1.5">
               <i data-lucide="zap" class="w-4 h-4 text-yt-pink"></i>
               <span>Reels & Shorts</span>
             </button>
-            <button onclick="switchProfileTab('videos')" id="profTabVideos" class="py-3 text-slate-400 hover:text-white border-b-2 border-transparent transition flex items-center space-x-1.5">
+            <button onclick="switchProfileTab('videos')" id="profTabVideos"
+              class="py-3 text-slate-400 hover:text-white border-b-2 border-transparent transition flex items-center space-x-1.5">
               <i data-lucide="video" class="w-4 h-4"></i>
               <span>Uploaded Videos</span>
             </button>
-            <button onclick="switchProfileTab('account')" id="profTabAccount" class="py-3 text-slate-400 hover:text-white border-b-2 border-transparent transition flex items-center space-x-1.5">
+            <button onclick="switchProfileTab('account')" id="profTabAccount"
+              class="py-3 text-slate-400 hover:text-white border-b-2 border-transparent transition flex items-center space-x-1.5">
               <i data-lucide="shield" class="w-4 h-4"></i>
               <span>Account & KYC</span>
             </button>
@@ -974,7 +1024,8 @@
           </div>
 
           <!-- TAB 3: ACCOUNT & KYC DETAILS -->
-          <div id="profContentAccount" class="hidden bg-yt-card rounded-2xl border border-yt-border p-6 space-y-4 text-xs">
+          <div id="profContentAccount"
+            class="hidden bg-yt-card rounded-2xl border border-yt-border p-6 space-y-4 text-xs">
             <h4 class="font-bold text-white text-sm">Creator Account & Verification Details</h4>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="p-3 bg-black/40 rounded-xl border border-yt-border space-y-1">
@@ -1003,7 +1054,8 @@
               </div>
             </div>
             <div class="pt-2 flex justify-end">
-              <button onclick="openEditProfileModal()" class="px-4 py-2 rounded-xl bg-white text-black font-bold text-xs hover:bg-slate-200 transition">
+              <button onclick="openEditProfileModal()"
+                class="px-4 py-2 rounded-xl bg-white text-black font-bold text-xs hover:bg-slate-200 transition">
                 Update Profile Info
               </button>
             </div>
@@ -1020,25 +1072,30 @@
         <!-- Top Header & Actions -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-yt-border">
           <div class="flex items-center space-x-3.5">
-            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-yt-pink/20 to-purple-500/20 border border-yt-border flex items-center justify-center text-amber-400 shrink-0">
+            <div
+              class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-yt-pink/20 to-purple-500/20 border border-yt-border flex items-center justify-center text-amber-400 shrink-0">
               <i data-lucide="bell" class="w-6 h-6"></i>
             </div>
             <div>
               <div class="flex items-center space-x-2.5">
                 <h1 class="text-xl sm:text-2xl font-black text-white">Notifications & Activity</h1>
-                <span id="notifCenterBadge" class="bg-red-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full">
+                <span id="notifCenterBadge"
+                  class="bg-red-600 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full">
                   8 unread
                 </span>
               </div>
-              <p class="text-xs text-slate-400 mt-0.5">Real-time alerts for earnings, ad rewards, reel approvals & community interactions</p>
+              <p class="text-xs text-slate-400 mt-0.5">Real-time alerts for earnings, ad rewards, reel approvals &
+                community interactions</p>
             </div>
           </div>
           <div class="flex items-center space-x-2.5">
-            <button onclick="markAllNotificationsRead()" class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-yt-hover hover:bg-yt-pillHover text-xs font-semibold text-slate-200 hover:text-white transition border border-yt-border/50">
+            <button onclick="markAllNotificationsRead()"
+              class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-yt-hover hover:bg-yt-pillHover text-xs font-semibold text-slate-200 hover:text-white transition border border-yt-border/50">
               <i data-lucide="check-check" class="w-4 h-4 text-emerald-400"></i>
               <span>Mark all read</span>
             </button>
-            <button onclick="clearAllNotifications()" class="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-yt-hover hover:bg-rose-500/20 text-xs font-semibold text-slate-400 hover:text-rose-400 transition border border-yt-border/50">
+            <button onclick="clearAllNotifications()"
+              class="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-yt-hover hover:bg-rose-500/20 text-xs font-semibold text-slate-400 hover:text-rose-400 transition border border-yt-border/50">
               <i data-lucide="trash-2" class="w-4 h-4"></i>
               <span>Clear all</span>
             </button>
@@ -1049,7 +1106,8 @@
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <!-- Unread Alerts -->
           <div class="bg-yt-card border border-yt-border rounded-2xl p-3.5 flex items-center space-x-3 shadow-lg">
-            <div class="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 flex items-center justify-center shrink-0">
+            <div
+              class="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 flex items-center justify-center shrink-0">
               <i data-lucide="bell-ring" class="w-5 h-5"></i>
             </div>
             <div>
@@ -1059,7 +1117,8 @@
           </div>
           <!-- Earning & Wallet -->
           <div class="bg-yt-card border border-yt-border rounded-2xl p-3.5 flex items-center space-x-3 shadow-lg">
-            <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+            <div
+              class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
               <i data-lucide="coins" class="w-5 h-5"></i>
             </div>
             <div>
@@ -1069,7 +1128,8 @@
           </div>
           <!-- Moderation Approvals -->
           <div class="bg-yt-card border border-yt-border rounded-2xl p-3.5 flex items-center space-x-3 shadow-lg">
-            <div class="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center shrink-0">
+            <div
+              class="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center shrink-0">
               <i data-lucide="clapperboard" class="w-5 h-5"></i>
             </div>
             <div>
@@ -1079,7 +1139,8 @@
           </div>
           <!-- Social Likes & Comments -->
           <div class="bg-yt-card border border-yt-border rounded-2xl p-3.5 flex items-center space-x-3 shadow-lg">
-            <div class="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+            <div
+              class="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
               <i data-lucide="heart" class="w-5 h-5"></i>
             </div>
             <div>
@@ -1091,23 +1152,28 @@
 
         <!-- Category Filter Tabs -->
         <div class="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
-          <button onclick="filterNotifPage('all')" id="notif-tab-all" class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-black transition shrink-0 flex items-center space-x-1.5 shadow-sm">
+          <button onclick="filterNotifPage('all')" id="notif-tab-all"
+            class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-white text-black transition shrink-0 flex items-center space-x-1.5 shadow-sm">
             <span>All</span>
             <span id="tabCountAll" class="opacity-75 font-normal">(9)</span>
           </button>
-          <button onclick="filterNotifPage('earning')" id="notif-tab-earning" class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white transition shrink-0 flex items-center space-x-1.5 border border-yt-border/40">
+          <button onclick="filterNotifPage('earning')" id="notif-tab-earning"
+            class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white transition shrink-0 flex items-center space-x-1.5 border border-yt-border/40">
             <span>💰 Earnings & Rewards</span>
             <span id="tabCountEarning" class="text-slate-400 font-normal">(3)</span>
           </button>
-          <button onclick="filterNotifPage('moderation')" id="notif-tab-moderation" class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white transition shrink-0 flex items-center space-x-1.5 border border-yt-border/40">
+          <button onclick="filterNotifPage('moderation')" id="notif-tab-moderation"
+            class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white transition shrink-0 flex items-center space-x-1.5 border border-yt-border/40">
             <span>🎬 Reel Approvals</span>
             <span id="tabCountModeration" class="text-slate-400 font-normal">(2)</span>
           </button>
-          <button onclick="filterNotifPage('social')" id="notif-tab-social" class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white transition shrink-0 flex items-center space-x-1.5 border border-yt-border/40">
+          <button onclick="filterNotifPage('social')" id="notif-tab-social"
+            class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white transition shrink-0 flex items-center space-x-1.5 border border-yt-border/40">
             <span>❤️ Social & Comments</span>
             <span id="tabCountSocial" class="text-slate-400 font-normal">(2)</span>
           </button>
-          <button onclick="filterNotifPage('system')" id="notif-tab-system" class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white transition shrink-0 flex items-center space-x-1.5 border border-yt-border/40">
+          <button onclick="filterNotifPage('system')" id="notif-tab-system"
+            class="notif-filter-tab px-4 py-2 rounded-xl text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white transition shrink-0 flex items-center space-x-1.5 border border-yt-border/40">
             <span>📢 Platform Updates</span>
             <span id="tabCountSystem" class="text-slate-400 font-normal">(2)</span>
           </button>
@@ -1236,19 +1302,23 @@
           <span class="text-[10px] text-slate-400 font-mono">Password: password123</span>
         </p>
         <div class="grid grid-cols-2 gap-1.5">
-          <button type="button" onclick="quickLogin('aarav_music')" class="p-1.5 rounded-lg bg-yt-hover hover:bg-yt-pillHover text-left transition border border-yt-border/50">
+          <button type="button" onclick="quickLogin('aarav_music')"
+            class="p-1.5 rounded-lg bg-yt-hover hover:bg-yt-pillHover text-left transition border border-yt-border/50">
             <p class="text-[11px] font-bold text-white">@aarav_music</p>
             <p class="text-[9px] text-slate-400">Aarav Sharma (Singer)</p>
           </button>
-          <button type="button" onclick="quickLogin('priya_tunes')" class="p-1.5 rounded-lg bg-yt-hover hover:bg-yt-pillHover text-left transition border border-yt-border/50">
+          <button type="button" onclick="quickLogin('priya_tunes')"
+            class="p-1.5 rounded-lg bg-yt-hover hover:bg-yt-pillHover text-left transition border border-yt-border/50">
             <p class="text-[11px] font-bold text-white">@priya_tunes</p>
             <p class="text-[9px] text-slate-400">Priya Verma (Classical)</p>
           </button>
-          <button type="button" onclick="quickLogin('bhojpuri_king')" class="p-1.5 rounded-lg bg-yt-hover hover:bg-yt-pillHover text-left transition border border-yt-border/50">
+          <button type="button" onclick="quickLogin('bhojpuri_king')"
+            class="p-1.5 rounded-lg bg-yt-hover hover:bg-yt-pillHover text-left transition border border-yt-border/50">
             <p class="text-[11px] font-bold text-white">@bhojpuri_king</p>
             <p class="text-[9px] text-slate-400">Manoj Tiwari</p>
           </button>
-          <button type="button" onclick="quickLogin('reporter')" class="p-1.5 rounded-lg bg-yt-hover hover:bg-yt-pillHover text-left transition border border-yt-border/50">
+          <button type="button" onclick="quickLogin('reporter')"
+            class="p-1.5 rounded-lg bg-yt-hover hover:bg-yt-pillHover text-left transition border border-yt-border/50">
             <p class="text-[11px] font-bold text-white">@reporter</p>
             <p class="text-[9px] text-slate-400">Telso Star Creator</p>
           </button>
@@ -1383,7 +1453,8 @@
   <!-- ======================================================== -->
   <!-- ✏️ EDIT PROFILE MODAL -->
   <!-- ======================================================== -->
-  <div id="editProfileModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md hidden p-4">
+  <div id="editProfileModal"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md hidden p-4">
     <div class="bg-yt-card border border-yt-border rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
       <div class="flex items-center justify-between pb-3 border-b border-yt-border">
         <h3 class="font-bold text-base text-white flex items-center space-x-2">
@@ -1398,26 +1469,32 @@
       <form id="editProfileForm" onsubmit="handleEditProfileSubmit(event)" class="space-y-3 pt-4">
         <div>
           <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Full Name</label>
-          <input type="text" id="editProfName" required class="w-full bg-yt-input border border-yt-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yt-pink">
+          <input type="text" id="editProfName" required
+            class="w-full bg-yt-input border border-yt-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yt-pink">
         </div>
         <div>
           <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Bio / Channel Description</label>
-          <textarea id="editProfBio" rows="2" class="w-full bg-yt-input border border-yt-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yt-pink"></textarea>
+          <textarea id="editProfBio" rows="2"
+            class="w-full bg-yt-input border border-yt-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yt-pink"></textarea>
         </div>
         <div>
           <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">WhatsApp Number</label>
-          <input type="tel" id="editProfWhatsapp" class="w-full bg-yt-input border border-yt-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yt-pink">
+          <input type="tel" id="editProfWhatsapp"
+            class="w-full bg-yt-input border border-yt-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yt-pink">
         </div>
         <div>
           <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Email Address</label>
-          <input type="email" id="editProfEmail" class="w-full bg-yt-input border border-yt-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yt-pink">
+          <input type="email" id="editProfEmail"
+            class="w-full bg-yt-input border border-yt-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yt-pink">
         </div>
 
         <div id="editProfMsg" class="text-xs hidden"></div>
 
         <div class="flex justify-end space-x-3 pt-2">
-          <button type="button" onclick="closeEditProfileModal()" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancel</button>
-          <button type="submit" id="btnEditProfSubmit" class="bg-gradient-to-r from-yt-pink to-yt-purple text-white font-bold text-xs px-5 py-2 rounded-xl transition">
+          <button type="button" onclick="closeEditProfileModal()"
+            class="px-4 py-2 text-xs text-slate-400 hover:text-white">Cancel</button>
+          <button type="submit" id="btnEditProfSubmit"
+            class="bg-gradient-to-r from-yt-pink to-yt-purple text-white font-bold text-xs px-5 py-2 rounded-xl transition">
             Save Changes
           </button>
         </div>
@@ -1429,40 +1506,52 @@
   <!-- 🔔 NOTIFICATIONS SLIDE-OVER DRAWER -->
   <!-- ======================================================== -->
   <div id="notificationsDrawer" class="fixed inset-0 z-50 overflow-hidden hidden">
-    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onclick="closeNotificationsDrawer()"></div>
-    <div class="fixed inset-y-0 right-0 max-w-md w-full bg-yt-card border-l border-yt-border shadow-2xl flex flex-col z-50">
-      
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onclick="closeNotificationsDrawer()">
+    </div>
+    <div
+      class="fixed inset-y-0 right-0 max-w-md w-full bg-yt-card border-l border-yt-border shadow-2xl flex flex-col z-50">
+
       <!-- Drawer Header -->
       <div class="p-4 border-b border-yt-border flex items-center justify-between">
         <div class="flex items-center space-x-2">
-          <div class="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+          <div
+            class="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
             <i data-lucide="bell" class="w-4 h-4"></i>
           </div>
           <h3 class="font-bold text-base text-white">Notifications</h3>
-          <span id="drawerUnreadCount" class="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">8</span>
+          <span id="drawerUnreadCount"
+            class="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">8</span>
         </div>
         <div class="flex items-center space-x-1">
-          <button onclick="navigate('notifications'); closeNotificationsDrawer();" class="text-xs text-yt-pink hover:text-white px-2 py-1 rounded-lg hover:bg-yt-hover font-semibold transition" title="Open Full Screen">
+          <button onclick="navigate('notifications'); closeNotificationsDrawer();"
+            class="text-xs text-yt-pink hover:text-white px-2 py-1 rounded-lg hover:bg-yt-hover font-semibold transition"
+            title="Open Full Screen">
             Full View ↗
           </button>
-          <button onclick="closeNotificationsDrawer()" class="text-slate-400 hover:text-white p-1 rounded-full hover:bg-yt-hover transition">
+          <button onclick="closeNotificationsDrawer()"
+            class="text-slate-400 hover:text-white p-1 rounded-full hover:bg-yt-hover transition">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
       </div>
 
       <!-- Quick Filter Pills in Drawer -->
-      <div class="px-4 py-2.5 border-b border-yt-border/50 flex items-center space-x-2 overflow-x-auto scrollbar-none bg-black/20">
-        <button onclick="filterDrawerNotifs('all')" id="drawer-tab-all" class="drawer-filter-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-black shrink-0 transition">
+      <div
+        class="px-4 py-2.5 border-b border-yt-border/50 flex items-center space-x-2 overflow-x-auto scrollbar-none bg-black/20">
+        <button onclick="filterDrawerNotifs('all')" id="drawer-tab-all"
+          class="drawer-filter-pill px-3 py-1 rounded-lg text-xs font-semibold bg-white text-black shrink-0 transition">
           All
         </button>
-        <button onclick="filterDrawerNotifs('earning')" id="drawer-tab-earning" class="drawer-filter-pill px-3 py-1 rounded-lg text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white shrink-0 transition">
+        <button onclick="filterDrawerNotifs('earning')" id="drawer-tab-earning"
+          class="drawer-filter-pill px-3 py-1 rounded-lg text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white shrink-0 transition">
           💰 Earnings
         </button>
-        <button onclick="filterDrawerNotifs('moderation')" id="drawer-tab-moderation" class="drawer-filter-pill px-3 py-1 rounded-lg text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white shrink-0 transition">
+        <button onclick="filterDrawerNotifs('moderation')" id="drawer-tab-moderation"
+          class="drawer-filter-pill px-3 py-1 rounded-lg text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white shrink-0 transition">
           🎬 Reels
         </button>
-        <button onclick="filterDrawerNotifs('social')" id="drawer-tab-social" class="drawer-filter-pill px-3 py-1 rounded-lg text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white shrink-0 transition">
+        <button onclick="filterDrawerNotifs('social')" id="drawer-tab-social"
+          class="drawer-filter-pill px-3 py-1 rounded-lg text-xs font-semibold bg-yt-hover text-slate-300 hover:text-white shrink-0 transition">
           ❤️ Social
         </button>
       </div>
@@ -1474,11 +1563,13 @@
 
       <!-- Drawer Footer -->
       <div class="p-3 border-t border-yt-border bg-black/40 flex items-center justify-between text-xs">
-        <button onclick="markAllNotificationsRead()" class="flex items-center space-x-1.5 text-slate-300 hover:text-white font-semibold transition">
+        <button onclick="markAllNotificationsRead()"
+          class="flex items-center space-x-1.5 text-slate-300 hover:text-white font-semibold transition">
           <i data-lucide="check-check" class="w-3.5 h-3.5 text-emerald-400"></i>
           <span>Mark all as read</span>
         </button>
-        <button onclick="navigate('notifications'); closeNotificationsDrawer();" class="text-yt-pink hover:underline font-bold flex items-center space-x-1">
+        <button onclick="navigate('notifications'); closeNotificationsDrawer();"
+          class="text-yt-pink hover:underline font-bold flex items-center space-x-1">
           <span>Open Full Center</span>
           <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
         </button>
@@ -1489,11 +1580,14 @@
   <!-- ======================================================== -->
   <!-- 💡 INTRODUCTORY "HOW EARNING WORKS" MODAL -->
   <!-- ======================================================== -->
-  <div id="earningGuideModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md hidden p-4">
-    <div class="bg-yt-card border border-yt-border rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+  <div id="earningGuideModal"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md hidden p-4">
+    <div
+      class="bg-yt-card border border-yt-border rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between pb-4 border-b border-yt-border">
         <div class="flex items-center space-x-2.5">
-          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-yt-pink to-yt-purple flex items-center justify-center text-white font-bold">
+          <div
+            class="w-9 h-9 rounded-xl bg-gradient-to-tr from-yt-pink to-yt-purple flex items-center justify-center text-white font-bold">
             💰
           </div>
           <div>
@@ -1508,11 +1602,13 @@
 
       <div class="space-y-4 pt-4 text-xs leading-relaxed text-slate-300">
         <p class="text-slate-200">
-          On Telso World, advertisers sponsor video ads. Viewers get paid real cash into their Telso Wallet for liking and commenting based on our <b>5-layer diminishing payout structure</b>:
+          On Telso World, advertisers sponsor video ads. Viewers get paid real cash into their Telso Wallet for liking
+          and commenting based on our <b>5-layer diminishing payout structure</b>:
         </p>
 
         <div class="space-y-2">
-          <div class="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+          <div
+            class="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
             <div>
               <p class="font-bold text-white">Layer 1: 1st – 100th Like / Comment</p>
               <p class="text-[10px] text-slate-400">First 100 engagements</p>
@@ -1550,7 +1646,8 @@
         </div>
 
         <p class="text-[11px] text-amber-300 font-medium">
-          ⚠️ <b>Sbko nahi milega:</b> After 1,500 likes/comments, the reward pool is exhausted. Early engagers earn the most!
+          ⚠️ <b>Sbko nahi milega:</b> After 1,500 likes/comments, the reward pool is exhausted. Early engagers earn the
+          most!
         </p>
 
         <div class="grid grid-cols-2 gap-3 pt-1">
@@ -1567,7 +1664,8 @@
         </div>
 
         <div class="flex justify-end pt-2">
-          <button onclick="closeEarningGuideModal()" class="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold">Close</button>
+          <button onclick="closeEarningGuideModal()"
+            class="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold">Close</button>
         </div>
       </div>
     </div>
@@ -1575,7 +1673,8 @@
 
   <!-- Floating Reward Toast -->
   <div id="floatingRewardToast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 hidden pointer-events-none">
-    <div class="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/20 flex items-center space-x-3">
+    <div
+      class="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/20 flex items-center space-x-3">
       <span class="text-2xl">🎉</span>
       <div>
         <p id="rewardToastTitle" class="font-black text-sm text-white">+₹0.10 Earning Credited!</p>
@@ -1587,7 +1686,8 @@
   <!-- ======================================================== -->
   <!-- 📱 MOBILE BOTTOM NAVIGATION BAR (YOUTUBE APP STYLE) -->
   <!-- ======================================================== -->
-  <nav id="mobileBottomNav" class="fixed bottom-0 inset-x-0 bg-yt-dark/95 backdrop-blur-lg border-t border-yt-border/60 z-50 md:hidden flex items-center justify-around py-1.5 px-2">
+  <nav id="mobileBottomNav"
+    class="fixed bottom-0 inset-x-0 bg-yt-dark/95 backdrop-blur-lg border-t border-yt-border/60 z-50 md:hidden flex items-center justify-around py-1.5 px-2">
     <!-- Home Tab -->
     <button onclick="navigate('feed')" id="mobile-nav-feed"
       class="mobile-nav-item flex flex-col items-center justify-center flex-1 py-1 text-white font-bold transition group">
@@ -1607,10 +1707,10 @@
     </button>
 
     <!-- + Create Tab (Center YouTube Floating Circle Button) -->
-    <button onclick="openUploadModal()" id="mobile-nav-create"
-      title="Create / Upload Reel"
+    <button onclick="openUploadModal()" id="mobile-nav-create" title="Create / Upload Reel"
       class="flex flex-col items-center justify-center flex-1 py-0.5 group">
-      <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-yt-pink to-yt-purple flex items-center justify-center text-white shadow-lg shadow-yt-pink/30 hover:scale-105 active:scale-95 transition">
+      <div
+        class="w-10 h-10 rounded-full bg-gradient-to-tr from-yt-pink to-yt-purple flex items-center justify-center text-white shadow-lg shadow-yt-pink/30 hover:scale-105 active:scale-95 transition">
         <i data-lucide="plus" class="w-6 h-6 stroke-[2.5]"></i>
       </div>
       <span class="text-[9px] font-bold text-slate-300 mt-0.5">Create</span>
@@ -1621,7 +1721,8 @@
       class="mobile-nav-item flex flex-col items-center justify-center flex-1 py-1 text-slate-400 hover:text-white transition group">
       <div class="relative">
         <i data-lucide="bell" class="w-5 h-5 transition group-hover:scale-110"></i>
-        <span id="mobileNotifBadge" class="absolute -top-1 -right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full min-w-[16px] text-center hidden">0</span>
+        <span id="mobileNotifBadge"
+          class="absolute -top-1 -right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full min-w-[16px] text-center hidden">0</span>
       </div>
       <span class="text-[10px] font-medium tracking-tight mt-1">Alerts</span>
     </button>
@@ -1630,7 +1731,8 @@
     <button onclick="navigate('profile')" id="mobile-nav-profile"
       class="mobile-nav-item flex flex-col items-center justify-center flex-1 py-1 text-slate-400 hover:text-white transition group">
       <div class="relative">
-        <div id="mobileAvatarPill" class="w-5 h-5 rounded-full bg-gradient-to-tr from-yt-pink to-yt-purple flex items-center justify-center text-[9px] font-bold text-white shadow-sm ring-1 ring-white/30">
+        <div id="mobileAvatarPill"
+          class="w-5 h-5 rounded-full bg-gradient-to-tr from-yt-pink to-yt-purple flex items-center justify-center text-[9px] font-bold text-white shadow-sm ring-1 ring-white/30">
           U
         </div>
       </div>
@@ -1948,7 +2050,7 @@
       }
       video.classList.remove('hidden');
       if (img) img.classList.add('opacity-0');
-      video.play().catch(() => {});
+      video.play().catch(() => { });
     }
 
     function stopHoverPreview(container) {
@@ -2305,7 +2407,7 @@
             player.play().then(() => {
               showShortsUnmuteOverlay();
               updateShortsMuteIcon(true);
-            }).catch(() => {});
+            }).catch(() => { });
           });
         }
       }
@@ -2353,7 +2455,7 @@
         if (res.status && res.view_count) {
           video.view_count = res.view_count;
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     function showShortsUnmuteOverlay() {
@@ -2523,11 +2625,11 @@
             </thead>
             <tbody class="divide-y divide-yt-border/50">
               ${videos.map(v => {
-                const status = v.status || 'Approved';
-                const statusColor = status === 'Approved' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                  : status === 'Rejected' ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                  : 'bg-amber-500/15 text-amber-400 border-amber-500/30';
-                return `
+          const status = v.status || 'Approved';
+          const statusColor = status === 'Approved' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+            : status === 'Rejected' ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+              : 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+          return `
                   <tr class="hover:bg-white/5 transition">
                     <td class="p-3">
                       <div class="flex items-center space-x-3">
@@ -2554,7 +2656,7 @@
                     </td>
                   </tr>
                 `;
-              }).join('')}
+        }).join('')}
             </tbody>
           </table>
         `;
@@ -3706,8 +3808,7 @@
 
       if (isDrawer) {
         return `
-          <div id="drawer-notif-${n.id}" class="p-3.5 rounded-2xl border transition group ${
-            isRead ? 'bg-yt-card/40 border-yt-border/40' : 'bg-yt-card border-yt-border shadow-md'
+          <div id="drawer-notif-${n.id}" class="p-3.5 rounded-2xl border transition group ${isRead ? 'bg-yt-card/40 border-yt-border/40' : 'bg-yt-card border-yt-border shadow-md'
           } hover:border-slate-500/80">
             <div class="flex items-start space-x-3">
               <div class="w-8 h-8 rounded-xl ${meta.colorClass} border flex items-center justify-center shrink-0 mt-0.5">
@@ -3730,22 +3831,20 @@
                   ${escapeHtml(n.message || n.body || '')}
                 </p>
                 <div class="flex items-center justify-between pt-1">
-                  ${
-                    actionUrl ? `
+                  ${actionUrl ? `
                       <button onclick="handleNotifAction('${n.id}', '${actionUrl}')" class="text-[11px] font-bold text-yt-pink hover:underline flex items-center space-x-1">
                         <span>${actionText}</span>
                         <i data-lucide="chevron-right" class="w-3 h-3"></i>
                       </button>
                     ` : '<div></div>'
-                  }
+          }
                   <div class="flex items-center space-x-1 opacity-80 group-hover:opacity-100 transition">
-                    ${
-                      !isRead ? `
+                    ${!isRead ? `
                         <button onclick="markSingleNotificationRead('${n.id}', event)" class="p-1 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-white/10" title="Mark Read">
                           <i data-lucide="check" class="w-3.5 h-3.5"></i>
                         </button>
                       ` : ''
-                    }
+          }
                     <button onclick="deleteSingleNotification('${n.id}', event)" class="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-white/10" title="Delete">
                       <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     </button>
@@ -3759,19 +3858,17 @@
 
       // Full Page Card
       return `
-        <div id="full-notif-${n.id}" class="p-4 sm:p-5 rounded-2xl border transition-all duration-200 group ${
-          isRead ? 'bg-yt-card/50 border-yt-border/40' : 'bg-yt-card border-yt-border shadow-xl hover:border-slate-500'
+        <div id="full-notif-${n.id}" class="p-4 sm:p-5 rounded-2xl border transition-all duration-200 group ${isRead ? 'bg-yt-card/50 border-yt-border/40' : 'bg-yt-card border-yt-border shadow-xl hover:border-slate-500'
         }">
           <div class="flex items-start space-x-4">
             <!-- Icon / Avatar Pill -->
             <div class="w-12 h-12 rounded-2xl ${meta.colorClass} border flex items-center justify-center shrink-0">
-              ${
-                n.avatar ? `
+              ${n.avatar ? `
                   <img src="${escapeHtml(n.avatar)}" class="w-full h-full object-cover rounded-2xl" onerror="this.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop'">
                 ` : `
                   <i data-lucide="${meta.icon}" class="w-6 h-6"></i>
                 `
-              }
+        }
             </div>
 
             <!-- Content Area -->
@@ -3781,21 +3878,19 @@
                   <span class="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-md border ${meta.tagClass}">
                     ${meta.label}
                   </span>
-                  ${
-                    !isRead ? `
+                  ${!isRead ? `
                       <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
                         New
                       </span>
                     ` : ''
-                  }
+        }
                 </div>
                 <div class="flex items-center space-x-2">
                   <span class="text-xs text-slate-400">${timeStr}</span>
-                  ${
-                    !isRead ? `
+                  ${!isRead ? `
                       <span class="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
                     ` : ''
-                  }
+        }
                 </div>
               </div>
 
@@ -3810,25 +3905,23 @@
               <!-- Action Bar -->
               <div class="flex flex-wrap items-center justify-between pt-2 border-t border-yt-border/40 gap-2">
                 <div>
-                  ${
-                    actionUrl ? `
+                  ${actionUrl ? `
                       <button onclick="handleNotifAction('${n.id}', '${actionUrl}')" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-yt-pink text-xs font-bold text-white transition">
                         <span>${actionText}</span>
                         <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
                       </button>
                     ` : ''
-                  }
+        }
                 </div>
 
                 <div class="flex items-center space-x-1.5">
-                  ${
-                    !isRead ? `
+                  ${!isRead ? `
                       <button onclick="markSingleNotificationRead('${n.id}', event)" class="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10 transition border border-yt-border/40">
                         <i data-lucide="check" class="w-3.5 h-3.5"></i>
                         <span>Mark Read</span>
                       </button>
                     ` : ''
-                  }
+        }
                   <button onclick="deleteSingleNotification('${n.id}', event)" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition border border-transparent hover:border-rose-500/30" title="Delete notification">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                   </button>

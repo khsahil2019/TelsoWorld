@@ -1087,85 +1087,206 @@ class _InboxScreenState extends State<InboxScreen>
 
   Widget _buildNotificationTile(Map<String, dynamic> item) {
     final isRead = item['isRead'] == true;
+    final iconColor = (item['iconColor'] as Color?) ?? AppColors.primaryPink;
+    final iconData = (item['icon'] as IconData?) ?? Icons.notifications_rounded;
+    final type = (item['type'] as String?) ?? 'general';
 
-    return GestureDetector(
-      onTap: () {
-        setState(() => item['isRead'] = true);
-        Get.snackbar(
-          item['title'] as String,
-          item['message'] as String,
-          snackPosition: SnackPosition.TOP,
-          backgroundColor: const Color(0xFF1E1E28),
-          colorText: Colors.white,
-          duration: const Duration(seconds: 2),
-        );
+    return Dismissible(
+      key: Key(item['id'].toString()),
+      direction: DismissDirection.endToStart,
+      onDismissed: (_) {
+        setState(() {
+          _notifications.removeWhere((n) => n['id'] == item['id']);
+        });
       },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          color: isRead ? const Color(0xFF14141C) : const Color(0xFF1C1420),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isRead ? Colors.white.withOpacity(0.04) : AppColors.primaryPink.withOpacity(0.35),
-          ),
+          borderRadius: BorderRadius.circular(18),
+          color: Colors.redAccent.withOpacity(0.25),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: (item['iconColor'] as Color).withOpacity(0.12),
-              ),
-              child: Icon(item['icon'] as IconData, size: 22, color: item['iconColor'] as Color),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        item['title'] as String,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: isRead ? FontWeight.w600 : FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        item['time'] as String,
-                        style: const TextStyle(color: Colors.white38, fontSize: 11),
-                      ),
+        alignment: Alignment.centerRight,
+        child: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 26),
+      ),
+      child: GestureDetector(
+        onTap: () {
+          setState(() => item['isRead'] = true);
+          Get.snackbar(
+            item['title'] as String,
+            item['message'] as String,
+            snackPosition: SnackPosition.TOP,
+            backgroundColor: const Color(0xFF1B1B26),
+            colorText: Colors.white,
+            duration: const Duration(seconds: 2),
+            icon: Icon(iconData, color: iconColor),
+            margin: const EdgeInsets.all(12),
+            borderRadius: 14,
+          );
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isRead
+                  ? [
+                      const Color(0xFF15151F),
+                      const Color(0xFF101018),
+                    ]
+                  : [
+                      const Color(0xFF22162A),
+                      const Color(0xFF181324),
                     ],
+            ),
+            border: Border.all(
+              color: isRead
+                  ? Colors.white.withOpacity(0.06)
+                  : AppColors.primaryPink.withOpacity(0.45),
+              width: isRead ? 1.0 : 1.5,
+            ),
+            boxShadow: isRead
+                ? []
+                : [
+                    BoxShadow(
+                      color: AppColors.primaryPink.withOpacity(0.12),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Left Accent Indicator Bar
+                  Container(
+                    width: 4,
+                    decoration: BoxDecoration(
+                      color: isRead ? Colors.transparent : iconColor,
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item['message'] as String,
-                    style: TextStyle(
-                      color: isRead ? Colors.white60 : Colors.white.withOpacity(0.85),
-                      fontSize: 13,
-                      height: 1.3,
+
+                  // Main Content
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Glowing Glassmorphic Icon Avatar
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  iconColor.withOpacity(0.28),
+                                  iconColor.withOpacity(0.08),
+                                ],
+                              ),
+                              border: Border.all(
+                                color: iconColor.withOpacity(0.4),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(iconData, size: 22, color: iconColor),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+
+                          // Text Info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    // Notification Type Pill
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: iconColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        type.toUpperCase(),
+                                        style: TextStyle(
+                                          color: iconColor,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.6,
+                                        ),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    // Timestamp
+                                    Text(
+                                      item['time'] as String,
+                                      style: const TextStyle(
+                                        color: Colors.white38,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (!isRead) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        width: 7,
+                                        height: 7,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppColors.primaryPink,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppColors.primaryPink.withOpacity(0.8),
+                                              blurRadius: 6,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  item['title'] as String,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: isRead ? FontWeight.w600 : FontWeight.w800,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  item['message'] as String,
+                                  style: TextStyle(
+                                    color: isRead ? Colors.white60 : Colors.white.withOpacity(0.88),
+                                    fontSize: 13,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            if (!isRead)
-              Container(
-                margin: const EdgeInsets.only(left: 8, top: 4),
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primaryPink,
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
