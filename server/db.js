@@ -139,6 +139,17 @@ class PostgresDatabase {
     }
 
     await this._syncSequences();
+
+    try {
+      await this.pool.query(`
+        UPDATE videos 
+        SET thumbnail_url = '/uploads/thumbnails/1794941733146-259610040_thumb.jpg', 
+            image = '/uploads/thumbnails/1794941733146-259610040_thumb.jpg', 
+            likes_count = 0, 
+            liked_by = '[]'::jsonb 
+        WHERE id = 26 AND (thumbnail_url = '' OR thumbnail_url IS NULL);
+      `);
+    } catch (_) {}
   }
 
   async _syncSequences() {
@@ -656,7 +667,7 @@ class PostgresDatabase {
   async updateUser(id, updates) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) return null;
-    const allowed = ['name', 'bio', 'email', 'whatsapp', 'status', 'profile_image', 'state', 'district'];
+    const allowed = ['name', 'bio', 'email', 'whatsapp', 'status', 'profile_image', 'state', 'district', 'password'];
     const sets = [];
     const vals = [];
     let idx = 1;
@@ -884,16 +895,18 @@ class PostgresDatabase {
       const video = mapVideo(rows[0]);
       const likedBy = [...video.liked_by];
       const earnedLikeUsers = [...video.earned_like_users];
-      const idx = likedBy.indexOf(uId);
+      const idx = likedBy.findIndex(
+        (id) => String(id) === String(uId) || String(id) === `user_${uId}`
+      );
 
       let liked = false;
-      let likesCount = video.likes_count || 0;
+      let likesCount = parseInt(video.likes_count || 0, 10);
       let rewardInfo = null;
       let notifyOwner = false;
 
       if (idx === -1) {
         likedBy.push(uId);
-        likesCount += 1;
+        likesCount = Math.max(likesCount + 1, likedBy.length);
         liked = true;
         if (video.user_id && video.user_id !== uId) notifyOwner = true;
 
@@ -929,7 +942,8 @@ class PostgresDatabase {
         }
       } else {
         likedBy.splice(idx, 1);
-        likesCount = Math.max(0, likesCount - 1);
+        likesCount = Math.max(0, likedBy.length);
+        liked = false;
       }
 
       await client.query(
@@ -1389,11 +1403,84 @@ class PostgresDatabase {
     return true;
   }
 
+  // --- Follows Management ---
+  async getFollowersCount(userId) {
+    try {
+      const { rows } = await this.pool.query(
+        'SELECT COUNT(*)::int AS cnt FROM follows WHERE following_id = $1',
+        [userId]
+      );
+      return rows[0] ? rows[0].cnt : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  async getFollowingCount(userId) {
+    try {
+      const { rows } = await this.pool.query(
+        'SELECT COUNT(*)::int AS cnt FROM follows WHERE follower_id = $1',
+        [userId]
+      );
+      return rows[0] ? rows[0].cnt : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  async isFollowing(followerId, followingId) {
+    try {
+      const { rows } = await this.pool.query(
+        'SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2',
+        [followerId, followingId]
+      );
+      return rows.length > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async toggleFollow(followerId, followingId) {
+    const isFollow = await this.isFollowing(followerId, followingId);
+    if (isFollow) {
+      await this.pool.query(
+        'DELETE FROM follows WHERE follower_id = $1 AND following_id = $2',
+        [followerId, followingId]
+      );
+      return { following: false };
+    } else {
+      await this.pool.query(
+        'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [followerId, followingId]
+      );
+      return { following: true };
+    }
+  }
+
+  async getLikedVideos(userId) {
+    try {
+      const idNum = parseInt(userId, 10);
+      const { rows } = await this.pool.query(
+        `SELECT * FROM videos 
+         WHERE liked_by @> $1::jsonb 
+            OR liked_by @> $2::jsonb 
+         ORDER BY id DESC`,
+        [JSON.stringify([idNum]), JSON.stringify([String(idNum)])]
+      );
+      return rows.map(mapVideo);
+    } catch (_) {
+      return [];
+    }
+  }
+
   // --- Creator Channel Stats ---
   async getCreatorStats(userId) {
     const uId = parseInt(userId || 1, 10);
     const user = (await this.findUserById(uId)) || (await this.getUsers())[0];
     const userVideos = await this.getUserVideos(user.id);
+    const likedVideos = await this.getLikedVideos(user.id);
+    const followersCount = await this.getFollowersCount(user.id);
+    const followingCount = await this.getFollowingCount(user.id);
     const totalLikes = userVideos.reduce((sum, v) => sum + (v.likes_count || 0), 0);
     const totalViews = userVideos.reduce((sum, v) => sum + (v.view_count || 0), 0);
     const totalComments = userVideos.reduce((sum, v) => sum + (v.comments_count || 0), 0);
@@ -1406,7 +1493,9 @@ class PostgresDatabase {
       name: user.name,
       username: user.username,
       avatar: (user.name || user.username || 'TW').substring(0, 2).toUpperCase(),
-      subscribers_count: 52,
+      subscribers_count: followersCount,
+      followers_count: followersCount,
+      following_count: followingCount,
       total_videos: userVideos.length,
       approved_count: approvedVideos.length,
       pending_count: pendingVideos.length,
@@ -1415,6 +1504,7 @@ class PostgresDatabase {
       total_comments: totalComments,
       wallet_balance: wallet.balance,
       videos: userVideos,
+      liked_videos: likedVideos,
     };
   }
 

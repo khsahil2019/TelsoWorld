@@ -193,6 +193,18 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
             ),
           ),
 
+          Positioned(
+            top: 40,
+            right: 16,
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.help_outline_rounded, color: Colors.white70),
+                onPressed: _showHelpSheet,
+                tooltip: 'Help',
+              ),
+            ),
+          ),
+
           // 📱 Main Scrollable Content
           SafeArea(
             child: Center(
@@ -288,9 +300,9 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. Username / Mobile Field
+                          // 1. Mobile Number, Username, or Email Field
                           const Text(
-                            'Username or Email',
+                            'Mobile Number, Email or Username',
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
@@ -324,7 +336,7 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
                               focusNode: _usernameFocus,
                               style: const TextStyle(color: Colors.white, fontSize: 14),
                               decoration: InputDecoration(
-                                hintText: 'Enter your username or email',
+                                hintText: 'Mobile number, email or @handle',
                                 hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
                                 prefixIcon: Container(
                                   margin: const EdgeInsets.all(8),
@@ -434,7 +446,7 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
                                 ),
                               ),
                               GestureDetector(
-                                onTap: _showHelpSheet,
+                                onTap: () => Get.toNamed(AppRoutes.forgotPassword),
                                 child: const Text(
                                   'Forgot Password?',
                                   style: TextStyle(

@@ -31,7 +31,7 @@ function normalizeMediaUrl(req, rawUrl) {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
   const rel = toRelativeMediaPath(rawUrl);
   if (rel.startsWith('/')) {
-    const protocol = req.protocol || 'http';
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
     const host = req.get('host');
     return host ? `${protocol}://${host}${rel}` : rel;
   }
@@ -121,10 +121,29 @@ async function ensureMp4PlayableWithSound(filePath) {
   }
 }
 
+async function generateVideoThumbnail(videoPath, thumbPath) {
+  try {
+    await execFileAsync('ffmpeg', [
+      '-y',
+      '-ss', '00:00:00.500',
+      '-i', videoPath,
+      '-vframes', '1',
+      '-vf', 'scale=480:-1',
+      '-q:v', '2',
+      thumbPath,
+    ], { timeout: 30000 });
+    return fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0;
+  } catch (err) {
+    console.warn('Thumbnail extraction failed:', err.message);
+    return false;
+  }
+}
+
 module.exports = {
   toRelativeMediaPath,
   normalizeMediaUrl,
   probeMediaStreams,
   ensureMp4PlayableWithSound,
+  generateVideoThumbnail,
 };
 

@@ -152,6 +152,13 @@ CREATE TABLE IF NOT EXISTS notifications (
   read BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+CREATE TABLE IF NOT EXISTS follows (
+  follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  following_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (follower_id, following_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_mobile ON users(mobile_no);
 CREATE INDEX IF NOT EXISTS idx_videos_user_id ON videos(user_id);
 CREATE INDEX IF NOT EXISTS idx_videos_status_type ON videos(status, video_type);
@@ -159,4 +166,7 @@ CREATE INDEX IF NOT EXISTS idx_comments_video_id ON comments(video_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_web_links_user_id ON web_links(user_id);
+CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
+
 

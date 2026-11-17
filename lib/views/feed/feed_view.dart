@@ -12,6 +12,7 @@ import 'package:telsoworld/core/routes/app_route_observer.dart';
 import 'package:telsoworld/views/ads/ads_view.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
+import 'package:telsoworld/core/services/storage_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
@@ -79,6 +80,8 @@ List<Uri> _videoUriCandidates(String rawUrl) {
 // ─────────────────────────────────────────
 class VideoItem {
   final int id;
+  final int userId;
+  final String username;
   final String subject;
   final String name;
   final String videoPath;
@@ -91,6 +94,8 @@ class VideoItem {
 
   const VideoItem({
     required this.id,
+    required this.userId,
+    required this.username,
     required this.subject,
     required this.name,
     required this.videoPath,
@@ -102,6 +107,8 @@ class VideoItem {
 
   factory VideoItem.fromJson(Map<String, dynamic> json) => VideoItem(
     id: json['id'] as int? ?? 0,
+    userId: _toInt(json['user_id']),
+    username: json['username']?.toString() ?? '',
     subject: json['subject']?.toString() ?? '',
     name: json['name']?.toString() ?? 'Unknown',
     videoPath: _normalizeVideoUrl(
@@ -110,7 +117,7 @@ class VideoItem {
     likesCount: _toInt(json['likes_count']),
     sharesCount: _toInt(json['shares_count']),
     videoType: json['video_type']?.toString() ?? 'normal',
-    liked: _toBool(json['liked']),
+    liked: _toBool(json['liked'] ?? json['is_liked']),
   );
 }
 
@@ -205,13 +212,14 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> with RouteAware {
+class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBindingObserver {
   final Logger _logger = Logger();
 
   bool _routeCovered = false;
   bool _routeObserverSubscribed = false;
+  bool _appInBackground = false;
 
-  bool get _playbackActive => widget.visible && !_routeCovered;
+  bool get _playbackActive => widget.visible && !_routeCovered && !_appInBackground;
 
   bool _isLoading = true;
   String? _error;
@@ -225,6 +233,7 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -247,9 +256,27 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     telsoRouteObserver.unsubscribe(this);
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    final inBackground = state != AppLifecycleState.resumed;
+    if (_appInBackground != inBackground) {
+      if (mounted) setState(() => _appInBackground = inBackground);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FeedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.visible != widget.visible) {
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -664,10 +691,14 @@ class _VideoPageState extends State<_VideoPage>
     final controller = _controller;
     if (!_initialized || controller == null) return;
     if (widget.isActive) {
-      controller.play();
+      if (!_isManuallyPaused) {
+        controller.setVolume(_isMuted ? 0.0 : 1.0);
+        controller.play();
+      }
       // Call view API only when the video first becomes visible (not on every rebuild).
       if (!oldWidget.isActive) _callViewApi();
     } else {
+      controller.setVolume(0.0);
       controller.pause();
       controller.seekTo(Duration.zero);
     }
@@ -757,23 +788,19 @@ class _VideoPageState extends State<_VideoPage>
       final Map<String, dynamic> json =
           jsonDecode(response.body) as Map<String, dynamic>;
       final apiLikeCount = (json['likes_count'] as num?)?.toInt();
+      final bool? isLikedResp = json['liked'] is bool
+          ? (json['liked'] as bool)
+          : (json['is_liked'] is bool
+              ? (json['is_liked'] as bool)
+              : (json['action'] == 'liked'
+                  ? true
+                  : (json['action'] == 'unliked' ? false : null)));
+
       if (!mounted) return;
 
       setState(() {
-        if (_isAdsVideo) {
-          final apiStatus = json['status']?.toString().toLowerCase();
-          if (apiStatus == 'liked') {
-            _isLiked = true;
-          } else if (apiStatus == 'unliked') {
-            _isLiked = false;
-          }
-        } else {
-          final action = json['action']?.toString().toLowerCase();
-          if (action == 'liked') {
-            _isLiked = true;
-          } else if (action == 'unliked') {
-            _isLiked = false;
-          }
+        if (isLikedResp != null) {
+          _isLiked = isLikedResp;
         }
         if (apiLikeCount != null) {
           _likesCount = apiLikeCount;
@@ -815,7 +842,23 @@ class _VideoPageState extends State<_VideoPage>
     super.dispose();
   }
 
-  Future<void> _onVideoTapLike() async {
+  bool _isManuallyPaused = false;
+
+  void _onSingleTapVideo() {
+    final c = _controller;
+    if (c == null || !_initialized) return;
+    setState(() {
+      if (c.value.isPlaying) {
+        c.pause();
+        _isManuallyPaused = true;
+      } else {
+        c.play();
+        _isManuallyPaused = false;
+      }
+    });
+  }
+
+  Future<void> _onDoubleTapVideo() async {
     if (!_initialized || _controller == null) return;
     await _toggleLike(animateHeart: true, forceLike: true);
   }
@@ -833,10 +876,25 @@ class _VideoPageState extends State<_VideoPage>
     );
   }
 
+  bool get _isSelfVideo {
+    final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+    final currentUserId = storage?.getUserId() ?? 0;
+    final currentUsername = storage?.getUsername().toLowerCase().trim() ?? '';
+    if (widget.video.userId > 0 && currentUserId > 0 && widget.video.userId == currentUserId) {
+      return true;
+    }
+    if (currentUsername.isNotEmpty && widget.video.username.toLowerCase().trim() == currentUsername) {
+      return true;
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _onVideoTapLike,
+      onTap: _onSingleTapVideo,
+      onDoubleTap: _onDoubleTapVideo,
+      behavior: HitTestBehavior.opaque,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -857,6 +915,25 @@ class _VideoPageState extends State<_VideoPage>
                 child: CircularProgressIndicator(
                   color: Color(0xFFD70F64),
                   strokeWidth: 2,
+                ),
+              ),
+            ),
+
+          // ── Play/Pause Icon overlay when video is paused by user ──
+          if (_initialized && _controller != null && (_isManuallyPaused || !_controller!.value.isPlaying))
+            Center(
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.55),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white24, width: 1.5),
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 46,
                 ),
               ),
             ),
@@ -937,6 +1014,7 @@ class _VideoPageState extends State<_VideoPage>
               likesCount: _likesCount,
               sharesCount: widget.video.sharesCount,
               videoTitle: widget.video.subject,
+              showFollowButton: !_isSelfVideo,
               onLikeTap: () => _toggleLike(),
               onCommentTap: _openCommentsSheet,
             ),
@@ -1096,7 +1174,7 @@ class _VideoErrorPlaceholder extends StatelessWidget {
 // ─────────────────────────────────────────
 // Top Bar
 // ─────────────────────────────────────────
-class _TopBar extends StatefulWidget {
+class _TopBar extends StatelessWidget {
   final String? referralCode;
   final VoidCallback onAdsTap;
   final bool hasSettingVideo;
@@ -1108,38 +1186,44 @@ class _TopBar extends StatefulWidget {
   });
 
   @override
-  State<_TopBar> createState() => _TopBarState();
-}
-
-class _TopBarState extends State<_TopBar> {
-  int _selectedTab = 1; // 0: Following, 1: For You
-
-  @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.center,
-        child: SizedBox(
-          width: screenWidth > 20 ? screenWidth - 20 : screenWidth,
-          child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Brand Logo & Live indicator (Clean, no For You / Following)
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Live Pulsing Badge
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [Color(0xFFFF2A6D), Color(0xFFFF8008)],
+                ).createShader(bounds),
+                child: const Text(
+                  'TELSO WORLD',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.45),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.white12),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 6,
-                      height: 6,
+                      width: 5,
+                      height: 5,
                       decoration: const BoxDecoration(
                         color: Color(0xFF00E676),
                         shape: BoxShape.circle,
@@ -1150,7 +1234,7 @@ class _TopBarState extends State<_TopBar> {
                       'LIVE',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 9.5,
+                        fontSize: 9,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.8,
                       ),
@@ -1158,71 +1242,13 @@ class _TopBarState extends State<_TopBar> {
                   ],
                 ),
               ),
+            ],
+          ),
 
-              const Spacer(),
-
-              // Feed Segmented Tabs (Following | For You)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: () => setState(() => _selectedTab = 0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Following',
-                          style: TextStyle(
-                            color: _selectedTab == 0 ? Colors.white : Colors.white54,
-                            fontSize: _selectedTab == 0 ? 14.5 : 13.5,
-                            fontWeight: _selectedTab == 0 ? FontWeight.w800 : FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: _selectedTab == 0 ? 20 : 0,
-                          height: 2.5,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD70F64),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  GestureDetector(
-                    onTap: () => setState(() => _selectedTab = 1),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'For You',
-                          style: TextStyle(
-                            color: _selectedTab == 1 ? Colors.white : Colors.white54,
-                            fontSize: _selectedTab == 1 ? 15.5 : 13.5,
-                            fontWeight: _selectedTab == 1 ? FontWeight.w800 : FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: _selectedTab == 1 ? 20 : 0,
-                          height: 2.5,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD70F64),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              const Spacer(),
-
+          // Action buttons on right
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               // 📹 Quick Upload Video Icon Button
               GestureDetector(
                 onTap: () {
@@ -1231,23 +1257,23 @@ class _TopBarState extends State<_TopBar> {
                   );
                 },
                 child: Container(
-                  width: 30,
-                  height: 30,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.45),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white12),
                   ),
-                  child: const Icon(Icons.video_call_rounded, color: Colors.white, size: 17),
+                  child: const Icon(Icons.video_call_rounded, color: Colors.white, size: 18),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
 
               // Ads Video button
               GestureDetector(
-                onTap: widget.onAdsTap,
+                onTap: onAdsTap,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
@@ -1264,13 +1290,13 @@ class _TopBarState extends State<_TopBar> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.campaign_rounded, color: Colors.white, size: 13),
-                      SizedBox(width: 3),
+                      Icon(Icons.campaign_rounded, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
                       Text(
                         'Ads',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 10.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -1278,7 +1304,7 @@ class _TopBarState extends State<_TopBar> {
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
 
               // Search Button (Switches to Discovery tab)
               GestureDetector(
@@ -1288,8 +1314,8 @@ class _TopBarState extends State<_TopBar> {
                   } catch (_) {}
                 },
                 child: Container(
-                  width: 30,
-                  height: 30,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.45),
                     shape: BoxShape.circle,
@@ -1300,7 +1326,7 @@ class _TopBarState extends State<_TopBar> {
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1314,6 +1340,7 @@ class _RightActions extends StatefulWidget {
   final int likesCount;
   final int sharesCount;
   final String videoTitle;
+  final bool showFollowButton;
   final VoidCallback onLikeTap;
   final VoidCallback onCommentTap;
 
@@ -1322,6 +1349,7 @@ class _RightActions extends StatefulWidget {
     required this.likesCount,
     required this.sharesCount,
     this.videoTitle = 'Telso Reel',
+    this.showFollowButton = true,
     required this.onLikeTap,
     required this.onCommentTap,
   });
@@ -1373,8 +1401,9 @@ class _RightActionsState extends State<_RightActions>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Avatar with Follow + Badge
+        // Avatar with Follow + Badge (Only shown if not own video)
         _Avatar(
+          showFollowButton: widget.showFollowButton,
           isFollowing: _isFollowing,
           onFollowTap: () {
             setState(() => _isFollowing = !_isFollowing);
@@ -1441,10 +1470,12 @@ class _RightActionsState extends State<_RightActions>
 
 class _Avatar extends StatelessWidget {
   final bool isFollowing;
+  final bool showFollowButton;
   final VoidCallback onFollowTap;
 
   const _Avatar({
     this.isFollowing = false,
+    this.showFollowButton = true,
     required this.onFollowTap,
   });
 
@@ -1468,27 +1499,28 @@ class _Avatar extends StatelessWidget {
             child: Icon(Icons.person, color: Colors.white, size: 28),
           ),
         ),
-        Positioned(
-          bottom: -8,
-          child: GestureDetector(
-            onTap: onFollowTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isFollowing ? const Color(0xFF00E676) : const Color(0xFFD70F64),
-                border: Border.all(color: Colors.black, width: 1.5),
-              ),
-              child: Icon(
-                isFollowing ? Icons.check : Icons.add,
-                color: Colors.white,
-                size: 13,
+        if (showFollowButton)
+          Positioned(
+            bottom: -8,
+            child: GestureDetector(
+              onTap: onFollowTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isFollowing ? const Color(0xFF00E676) : const Color(0xFFD70F64),
+                  border: Border.all(color: Colors.black, width: 1.5),
+                ),
+                child: Icon(
+                  isFollowing ? Icons.check : Icons.add,
+                  color: Colors.white,
+                  size: 13,
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

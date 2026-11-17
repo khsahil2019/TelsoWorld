@@ -37,6 +37,11 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _targetUrlController = TextEditingController();
+  final TextEditingController _budgetController = TextEditingController();
+
+  // Video Type: 'normal' (Simple Reel) vs 'ads' (Promotion / Sponsored Reel)
+  String _videoType = 'normal';
 
   File? _selectedVideoFile;
   Duration? _videoDuration;
@@ -56,6 +61,8 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
     _titleController.dispose();
     _subjectController.dispose();
     _nameController.dispose();
+    _targetUrlController.dispose();
+    _budgetController.dispose();
     super.dispose();
   }
 
@@ -367,6 +374,9 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
       });
       request.fields['title'] = _titleController.text.trim();
       request.fields['subject'] = _subjectController.text.trim();
+      request.fields['video_type'] = _videoType;
+      request.fields['target_url'] = _targetUrlController.text.trim();
+      request.fields['budget'] = _budgetController.text.trim();
       request.fields['name'] = _nameController.text.trim().isNotEmpty
           ? _nameController.text.trim()
           : _titleController.text.trim();
@@ -988,6 +998,118 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
             ),
           ),
           const SizedBox(height: 18),
+          const Text(
+            'Reel Type *',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _videoType = 'normal'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: _videoType == 'normal'
+                          ? _kUploadPink.withValues(alpha: 0.18)
+                          : const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _videoType == 'normal' ? _kUploadPink : Colors.white12,
+                        width: _videoType == 'normal' ? 1.5 : 1.0,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.movie_creation_outlined,
+                          color: _videoType == 'normal' ? _kUploadPink : Colors.white54,
+                          size: 22,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Simple Reel',
+                          style: TextStyle(
+                            color: _videoType == 'normal' ? Colors.white : Colors.white70,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Standard Creator Content',
+                          style: TextStyle(color: Colors.white38, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _videoType = 'ads'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: _videoType == 'ads'
+                          ? const Color(0xFFFF8008).withValues(alpha: 0.18)
+                          : const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _videoType == 'ads' ? const Color(0xFFFF8008) : Colors.white12,
+                        width: _videoType == 'ads' ? 1.5 : 1.0,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.campaign_rounded,
+                          color: _videoType == 'ads' ? const Color(0xFFFF8008) : Colors.white54,
+                          size: 22,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Promotion / Ad',
+                          style: TextStyle(
+                            color: _videoType == 'ads' ? Colors.white : Colors.white70,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Sponsored Campaign Reel',
+                          style: TextStyle(color: Colors.white38, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_videoType == 'ads') ...[
+            const SizedBox(height: 14),
+            _UploadField(
+              controller: _targetUrlController,
+              label: 'Target URL / Website Link *',
+              hintText: 'https://yourwebsite.com or CTA link',
+            ),
+            const SizedBox(height: 14),
+            _UploadField(
+              controller: _budgetController,
+              label: 'Promotion Budget (₹) *',
+              hintText: 'e.g. 500.00',
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+          ],
+          const SizedBox(height: 18),
           _UploadField(
             controller: _titleController,
             label: 'Title *',
@@ -1057,12 +1179,14 @@ class _UploadField extends StatelessWidget {
   final String label;
   final String hintText;
   final int maxLines;
+  final TextInputType? keyboardType;
 
   const _UploadField({
     required this.controller,
     required this.label,
     required this.hintText,
     this.maxLines = 1,
+    this.keyboardType,
   });
 
   @override
@@ -1082,6 +1206,7 @@ class _UploadField extends StatelessWidget {
         TextField(
           controller: controller,
           maxLines: maxLines,
+          keyboardType: keyboardType,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             hintText: hintText,

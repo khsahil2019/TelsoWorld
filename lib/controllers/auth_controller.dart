@@ -59,6 +59,12 @@ class AuthController extends GetxController {
           // User model parse karo
           if (json['user'] != null) {
             currentUser.value = UserModel.fromJson(json['user']);
+            if (currentUser.value?.id != null) {
+              await _storageService.setUserId(currentUser.value!.id!);
+            }
+            if (currentUser.value?.username.isNotEmpty == true) {
+              await _storageService.setUsername(currentUser.value!.username);
+            }
           }
           // Main app dashboard par jao (Back stack clear karke)
           Get.offAllNamed(AppRoutes.main);

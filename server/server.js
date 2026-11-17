@@ -12,6 +12,7 @@ const adminRoutes = require('./routes/admin');
 const db = require('./db');
 
 const app = express();
+app.enable('trust proxy');
 const PORT = process.env.PORT || 5050;
 
 // Enable CORS for all requests (Flutter Web, Emulators, Admin Panel)

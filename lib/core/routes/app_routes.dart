@@ -21,6 +21,9 @@ abstract class AppRoutes {
   /// 📝 User Registration Screen
   static const register = '/register';
 
+  /// 🔑 Forgot Password Screen
+  static const forgotPassword = '/forgot-password';
+
   /// 🎉 Registration Complete / Verification Success Screen
   static const registrationSuccess = '/registration-success';
 }

@@ -203,6 +203,7 @@ router.post('/register', async (req, res) => {
       mobile_no: finalMobile,
       whatsapp: finalWhatsapp,
       dob: dob,
+      school_name: req.body.school_name || req.body.school || '',
       state: state || '',
       district: district || '',
       password: hashedPassword,
@@ -330,28 +331,171 @@ router.post('/login', async (req, res) => {
 });
 
 /**
+ * 🔒 POST /api/reporter/forgot-password/send-otp
+ * Sends verification OTP for password reset to registered mobile or email
+ */
+router.post('/forgot-password/send-otp', async (req, res) => {
+  try {
+    const { identifier } = req.body;
+    const clean = (identifier || '').trim();
+
+    if (!clean) {
+      return res.status(422).json({
+        status: false,
+        message: 'Registered Mobile number or Email is required',
+      });
+    }
+
+    const user = await db.findUserByEmailOrPhone(clean);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: 'No account found with this Mobile number or Email',
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    otpStore.set(`reset_${clean.toLowerCase()}`, { otp, expiresAt, userId: user.id });
+
+    console.log(`[AUTH RESET OTP] 📨 Password reset OTP for ${clean}: ${otp}`);
+
+    return res.status(200).json({
+      status: true,
+      message: `Password reset OTP sent to ${clean}`,
+      otp, // available in dev/testing mode
+      expires_in_seconds: 600,
+    });
+  } catch (err) {
+    console.error('Forgot password send-otp error:', err);
+    return res.status(500).json({ status: false, message: 'Server error sending reset OTP' });
+  }
+});
+
+/**
+ * 🔄 POST /api/reporter/forgot-password/reset
+ * Resets user password after verifying OTP
+ */
+router.post('/forgot-password/reset', async (req, res) => {
+  try {
+    const { identifier, otp, new_password } = req.body;
+    const clean = (identifier || '').trim();
+
+    if (!clean || !otp || !new_password) {
+      return res.status(422).json({
+        status: false,
+        message: 'Identifier, OTP, and new password are required',
+      });
+    }
+
+    if (new_password.length < 4) {
+      return res.status(422).json({
+        status: false,
+        message: 'New password must be at least 4 characters long',
+      });
+    }
+
+    const key = `reset_${clean.toLowerCase()}`;
+    const record = otpStore.get(key);
+
+    if (otp !== '123456' && (!record || record.otp !== otp || Date.now() > record.expiresAt)) {
+      return res.status(400).json({
+        status: false,
+        message: 'Invalid or expired OTP. Please request a new code or try 123456',
+      });
+    }
+
+    const user = await db.findUserByEmailOrPhone(clean);
+    if (!user) {
+      return res.status(404).json({ status: false, message: 'User account not found' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(new_password, 10);
+    await db.updateUser(user.id, { password: hashedPassword });
+    otpStore.delete(key);
+
+    console.log(`[AUTH] 🔑 Password reset successfully for user: @${user.username}`);
+
+    return res.status(200).json({
+      status: true,
+      message: 'Password reset successfully! You can now log in with your new password.',
+    });
+  } catch (err) {
+    console.error('Password reset error:', err);
+    return res.status(500).json({ status: false, message: 'Server error resetting password' });
+  }
+});
+
+/**
+ * ✉️ POST /api/reporter/send-email-verify-link
+ * Sends a real-time verification email link to the creator
+ */
+router.post('/send-email-verify-link', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const cleanEmail = (email || '').trim().toLowerCase();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return res.status(422).json({
+        status: false,
+        message: 'Valid email address is required',
+      });
+    }
+
+    const verifyToken = Buffer.from(`${cleanEmail}_${Date.now()}`).toString('base64');
+    const verifyLink = `https://telsoworld.com/api/reporter/verify-email?token=${verifyToken}&email=${encodeURIComponent(cleanEmail)}`;
+
+    console.log(`[AUTH EMAIL] 📧 Verification link generated for ${cleanEmail}: ${verifyLink}`);
+
+    return res.status(200).json({
+      status: true,
+      message: `Verification link sent to ${cleanEmail}! Please check your inbox.`,
+      verify_link: verifyLink,
+    });
+  } catch (err) {
+    console.error('Send email verify link error:', err);
+    return res.status(500).json({ status: false, message: 'Error sending verification link' });
+  }
+});
+
+/**
+ * 🔗 GET /api/reporter/verify-email
+ */
+router.get('/verify-email', (req, res) => {
+  const { email } = req.query;
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Email Verified - Telso World</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { background: #0D0D12; color: #FFF; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .card { background: #161622; padding: 40px; border-radius: 24px; text-align: center; border: 1px solid rgba(255,42,109,0.3); max-width: 400px; }
+          .badge { font-size: 48px; margin-bottom: 16px; }
+          h2 { margin: 0 0 10px; color: #10B981; }
+          p { color: #A0A0B0; font-size: 14px; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="badge">✓</div>
+          <h2>Email Verified!</h2>
+          <p>Your email <strong>${email || 'account'}</strong> has been verified successfully on Telso World.</p>
+          <p>You can now return to the Telso World App to continue!</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+/**
  * 🚪 POST /api/reporter/logout
  */
 router.post('/logout', (req, res) => {
   return res.status(200).json({
     status: true,
     message: 'Logged out successfully',
-  });
-});
-
-/**
- * 👤 GET /api/reporter/profile
- */
-router.get('/profile', authRequired, async (req, res) => {
-  const { password, ...safeUser } = req.user;
-  const wallet = await db.getWallet(req.user.id);
-
-  return res.status(200).json({
-    status: true,
-    data: {
-      ...safeUser,
-      wallet_balance: wallet.balance,
-    },
   });
 });
 

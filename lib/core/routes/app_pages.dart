@@ -7,6 +7,7 @@ import 'package:telsoworld/controllers/wallet_controller.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/views/auth/registration_view.dart';
 import 'package:telsoworld/views/auth/login_view.dart';
+import 'package:telsoworld/views/auth/forgot_password_view.dart';
 import 'package:telsoworld/views/auth/registration_success_view.dart';
 import 'package:telsoworld/views/main_nav/main_nav_view.dart';
 import 'package:telsoworld/views/splash/splash_view.dart';
@@ -46,7 +47,13 @@ class AppPages {
       page: () => const MusicianRegistrationScreen(),
     ),
 
-    // 4. Registration Success Confirmation
+    // 4. Authentication: Forgot Password
+    GetPage(
+      name: AppRoutes.forgotPassword,
+      page: () => const ForgotPasswordView(),
+    ),
+
+    // 5. Registration Success Confirmation
     GetPage(
       name: AppRoutes.registrationSuccess,
       page: () => const RegistrationSuccessView(),

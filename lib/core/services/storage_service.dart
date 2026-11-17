@@ -57,9 +57,39 @@ class StorageService extends GetxService {
       } catch (_) {}
     }
     if (_prefs != null) {
+      await _prefs!.remove('user_id');
+      await _prefs!.remove('username');
       return await _prefs!.remove('token');
     }
     return true;
+  }
+
+  /// 👤 User ID
+  int getUserId() {
+    return _prefs?.getInt('user_id') ?? 0;
+  }
+
+  Future<bool> setUserId(int id) async {
+    if (_prefs == null) {
+      try {
+        _prefs = await SharedPreferences.getInstance();
+      } catch (_) {}
+    }
+    return await _prefs?.setInt('user_id', id) ?? false;
+  }
+
+  /// 🏷️ Username
+  String getUsername() {
+    return _prefs?.getString('username')?.trim() ?? '';
+  }
+
+  Future<bool> setUsername(String username) async {
+    if (_prefs == null) {
+      try {
+        _prefs = await SharedPreferences.getInstance();
+      } catch (_) {}
+    }
+    return await _prefs?.setString('username', username.trim()) ?? false;
   }
 
   /// ✅ Check karta hai ki token available hai ya nahi (User logged in hai ya nahi)

@@ -7,11 +7,15 @@ import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:telsoworld/views/ads/ads_view.dart';
+import 'package:telsoworld/views/profile/profile_reels_viewer_screen.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
 import 'package:telsoworld/views/upload/uploaded_video_view.dart';
 import 'package:telsoworld/views/wallet/wallet_view.dart';
 import 'package:telsoworld/views/web_link/updated_web_link_view.dart';
 
+/// ---------------------------------------------------------------------------
+/// 👤 ProfileScreen (Real-Time Creator Profile & Analytics Hub)
+/// ---------------------------------------------------------------------------
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -20,67 +24,30 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  bool _isLoading = true;
   bool _isLoggingOut = false;
 
-  final String _userName = 'Telso Creator';
-  final String _userHandle = '@reporter';
+  String _userName = 'Creator';
+  String _userHandle = '@creator';
+  String _bio = 'Official Creator on Telso World 🎵';
   String _walletBalance = '₹0.00';
+  int _totalVideos = 0;
+  int _followersCount = 0;
+  int _followingCount = 0;
+  int _totalLikes = 0;
 
-  final List<Map<String, dynamic>> _myVideos = [
-    {'title': 'Stage Live Performance', 'views': '24.5K', 'likes': '1.2K', 'gradient': [Color(0xFF8A2387), Color(0xFFE94057)]},
-    {'title': 'Bhojpuri Hits Folk', 'views': '105K', 'likes': '8.4K', 'gradient': [Color(0xFF11998E), Color(0xFF38EF7D)]},
-    {'title': 'Acoustic Guitar Cover', 'views': '8.2K', 'likes': '920', 'gradient': [Color(0xFFF2994A), Color(0xFFF2C94C)]},
-    {'title': 'Classical Beats', 'views': '45.1K', 'likes': '3.1K', 'gradient': [Color(0xFF2980B9), Color(0xFF6DD5FA)]},
-    {'title': 'Street Vibe Music', 'views': '12.9K', 'likes': '780', 'gradient': [Color(0xFFED213A), Color(0xFF93291E)]},
-    {'title': 'Harmonium Solo', 'views': '500K', 'likes': '42K', 'gradient': [Color(0xFF654EA3), Color(0xFFEAAFC8)]},
-  ];
+  List<Map<String, dynamic>> _userReels = [];
+  List<Map<String, dynamic>> _likedReels = [];
 
-  final List<Map<String, dynamic>> _uploadedManagementVideos = [
-    {
-      'id': 1,
-      'subject': 'Bhojpuri Song',
-      'title': 'Avela Niyra Buta Dele Diyra',
-      'uploadedAt': '20/03/2026 05:40 AM',
-      'status': 'Approved',
-      'views': '24.5K',
-      'likes': 1240,
-    },
-    {
-      'id': 2,
-      'subject': 'Stage Dance',
-      'title': 'Live Folk Performance in Patna',
-      'uploadedAt': '19/03/2026 10:15 AM',
-      'status': 'Approved',
-      'views': '12.8K',
-      'likes': 890,
-    },
-    {
-      'id': 3,
-      'subject': 'Harmonium Track',
-      'title': 'Classical Solo Raga Session',
-      'uploadedAt': '19/03/2026 10:03 AM',
-      'status': 'Approved',
-      'views': '45.1K',
-      'likes': 3100,
-    },
-    {
-      'id': 4,
-      'subject': 'Reporter Ground Story',
-      'title': 'Public Reaction on New Schemes',
-      'uploadedAt': '19/03/2026 10:04 AM',
-      'status': 'Pending',
-      'views': '0',
-      'likes': 0,
-    },
-    {
-      'id': 5,
-      'subject': 'Comedy Short',
-      'title': 'Funny Behind The Scenes Bloopers',
-      'uploadedAt': '19/03/2026 10:01 AM',
-      'status': 'Approved',
-      'views': '89.4K',
-      'likes': 5400,
-    },
+  final List<List<Color>> _gridGradients = const [
+    [Color(0xFF8A2387), Color(0xFFE94057)],
+    [Color(0xFF11998E), Color(0xFF38EF7D)],
+    [Color(0xFFF2994A), Color(0xFFF2C94C)],
+    [Color(0xFF2980B9), Color(0xFF6DD5FA)],
+    [Color(0xFFED213A), Color(0xFF93291E)],
+    [Color(0xFF654EA3), Color(0xFFEAAFC8)],
   ];
 
   @override
@@ -89,27 +56,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadProfileData();
   }
 
+  String _formatCount(int number) {
+    if (number >= 1000000) {
+      return '${(number / 1000000).toStringAsFixed(1)}M';
+    } else if (number >= 1000) {
+      return '${(number / 1000).toStringAsFixed(1)}K';
+    }
+    return number.toString();
+  }
+
+  String? _getThumbnailUrl(Map<String, dynamic> video) {
+    final raw = video['thumbnail_url'] ?? video['image'];
+    if (raw == null) return null;
+    final str = raw.toString().trim();
+    if (str.isEmpty) return null;
+    if (str.startsWith('http://') || str.startsWith('https://')) return str;
+    return '${ApiEndpoints.baseUrl}${str.startsWith('/') ? str : '/$str'}';
+  }
+
   Future<void> _loadProfileData() async {
     try {
       final token = await SessionTokenStore.getToken();
-      if (token.isEmpty) return;
+      if (token.isEmpty) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
-      // Load Wallet Balance Preview
-      final walletResponse = await http.get(
-        Uri.parse('${ApiEndpoints.baseUrl}/reporter/wallet'),
-        headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+      final profileResponse = await http.get(
+        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.profile}'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
       ).timeout(const Duration(seconds: 15));
 
-      if (walletResponse.statusCode == 200) {
-        final json = jsonDecode(walletResponse.body);
-        if (mounted && json is Map) {
-          final bal = json['balance'] ?? json['total_balance'] ?? '0.00';
+      if (profileResponse.statusCode == 200) {
+        final json = jsonDecode(profileResponse.body);
+        if (mounted && json is Map && json['data'] is Map) {
+          final d = json['data'] as Map<String, dynamic>;
+          final rawVideos = (d['videos'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
+          final rawLiked = (d['liked_videos'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
+
           setState(() {
-            _walletBalance = '₹$bal';
+            _userName = d['name']?.toString().trim().isNotEmpty == true
+                ? d['name'].toString().trim()
+                : (d['username']?.toString() ?? 'Creator');
+            final rawHandle = d['username']?.toString() ?? 'creator';
+            _userHandle = rawHandle.startsWith('@') ? rawHandle : '@$rawHandle';
+            _bio = d['bio']?.toString().trim().isNotEmpty == true
+                ? d['bio'].toString().trim()
+                : 'Official Creator on Telso World 🎵';
+            _walletBalance = '₹${d['wallet_balance'] ?? '0.00'}';
+            _totalVideos = int.tryParse(d['total_videos']?.toString() ?? '') ?? rawVideos.length;
+            _followersCount = int.tryParse(d['followers_count']?.toString() ?? '') ?? 0;
+            _followingCount = int.tryParse(d['following_count']?.toString() ?? '') ?? 0;
+            _totalLikes = int.tryParse(d['total_likes']?.toString() ?? '') ?? 0;
+            _userReels = rawVideos;
+            _likedReels = rawLiked;
+            _isLoading = false;
           });
+          return;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error loading real-time profile: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _logout() async {
@@ -159,49 +172,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
+        key: _scaffoldKey,
         backgroundColor: const Color(0xFF0F0F12),
-        body: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverToBoxAdapter(child: _buildProfileHeader()),
-          ],
-          body: Column(
-            children: [
-              Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFF141418),
-                  border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
-                ),
-                child: const TabBar(
-                  indicatorColor: AppColors.primaryPink,
-                  indicatorWeight: 3,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white54,
-                  labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  tabs: [
-                    Tab(icon: Icon(Icons.grid_on_rounded, size: 18), text: 'Reels'),
-                    Tab(icon: Icon(Icons.video_library_rounded, size: 18), text: 'My Videos'),
-                    Tab(icon: Icon(Icons.favorite_rounded, size: 18), text: 'Liked'),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _buildVideoGrid(_myVideos),
-                    _buildUploadedVideosSection(),
-                    _buildVideoGrid(_myVideos.reversed.toList()),
-                  ],
-                ),
-              ),
+        endDrawer: _buildProfileDrawer(),
+        body: RefreshIndicator(
+          color: AppColors.primaryPink,
+          backgroundColor: const Color(0xFF1E1E24),
+          onRefresh: _loadProfileData,
+          child: NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) => [
+              SliverToBoxAdapter(child: _buildProfileHeader()),
             ],
+            body: Column(
+              children: [
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF141418),
+                    border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
+                  ),
+                  child: const TabBar(
+                    indicatorColor: AppColors.primaryPink,
+                    indicatorWeight: 3,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white54,
+                    labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    tabs: [
+                      Tab(icon: Icon(Icons.grid_on_rounded, size: 18), text: 'Reels'),
+                      Tab(icon: Icon(Icons.video_library_rounded, size: 18), text: 'My Videos'),
+                      Tab(icon: Icon(Icons.favorite_rounded, size: 18), text: 'Liked'),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(color: AppColors.primaryPink, strokeWidth: 2),
+                        )
+                      : TabBarView(
+                          children: [
+                            _buildReelsGrid(_userReels),
+                            _buildUploadedVideosSection(_userReels),
+                            _buildReelsGrid(_likedReels, isLikedTab: true),
+                          ],
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  /// 🌟 Profile Header (Clean & Minimalist, Quick Tools Moved to Drawer)
   Widget _buildProfileHeader() {
+    final avatarLetter = _userName.trim().isNotEmpty ? _userName.trim()[0].toUpperCase() : 'C';
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -219,13 +246,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             children: [
-              // Top Bar
+              // 🔝 Top Bar with Handle & Instagram-style Menu Drawer Button
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.06),
                       shape: BoxShape.circle,
@@ -241,16 +268,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       letterSpacing: 0.5,
                     ),
                   ),
-                  _isLoggingOut
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 22),
-                          onPressed: _logout,
-                        ),
+                  IconButton(
+                    icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+                    tooltip: 'Creator Menu & Wallet',
+                    onPressed: () {
+                      _scaffoldKey.currentState?.openEndDrawer();
+                    },
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -281,8 +305,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         shape: BoxShape.circle,
                         color: Color(0xFF1E1E24),
                       ),
-                      child: const Center(
-                        child: Icon(Icons.person_rounded, size: 48, color: Colors.white),
+                      child: Center(
+                        child: Text(
+                          avatarLetter,
+                          style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                   ),
@@ -316,7 +343,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   border: Border.all(color: AppColors.primaryPink.withOpacity(0.5)),
                 ),
                 child: const Text(
-                  'Verified Reporter',
+                  'Verified Creator',
                   style: TextStyle(
                     color: Color(0xFFFF6584),
                     fontSize: 11,
@@ -324,9 +351,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
 
-              // Stats Row Card
+              if (_bio.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    _bio,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 16),
+
+              // Real-Time Stats Row Card
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                 decoration: BoxDecoration(
@@ -337,121 +379,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem('7', 'VIDEOS'),
+                    _buildStatItem(_totalVideos.toString(), 'VIDEOS'),
                     _buildDivider(),
-                    _buildStatItem('45.2K', 'FOLLOWERS'),
+                    _buildStatItem(_formatCount(_followersCount), 'FOLLOWERS'),
                     _buildDivider(),
-                    _buildStatItem('187K', 'VIEWS'),
+                    _buildStatItem(_formatCount(_followingCount), 'FOLLOWING'),
+                    _buildDivider(),
+                    _buildStatItem(_formatCount(_totalLikes), 'LIKES'),
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-
-              // 🌟 Creator Services Hub (Drawer tools integrated directly here!)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161622),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Text(
-                          '⚡ Creator Services & Tools',
-                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          'Quick Access',
-                          style: TextStyle(color: Colors.white38, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // Row 1
-                    Row(
-                      children: [
-                        // 1. Wallet Card
-                        Expanded(
-                          child: _buildActionTile(
-                            icon: Icons.account_balance_wallet_rounded,
-                            iconColor: AppColors.primaryPink,
-                            bgColor: const Color(0xFF2A1522),
-                            borderColor: AppColors.primaryPink.withOpacity(0.35),
-                            title: 'Wallet Balance',
-                            value: _walletBalance,
-                            valueColor: Colors.white,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(builder: (_) => const WalletScreen()),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-
-                        // 2. Video Studio
-                        Expanded(
-                          child: _buildActionTile(
-                            icon: Icons.video_library_rounded,
-                            iconColor: const Color(0xFFFF8008),
-                            bgColor: const Color(0xFF2A1F15),
-                            borderColor: const Color(0xFFFF8008).withOpacity(0.35),
-                            title: 'Video Studio',
-                            value: 'My Videos',
-                            valueColor: const Color(0xFFFFC837),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(builder: (_) => const UploadedVideoScreen()),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Row 2
-                    Row(
-                      children: [
-                        // 3. Web Link
-                        Expanded(
-                          child: _buildActionTile(
-                            icon: Icons.link_rounded,
-                            iconColor: const Color(0xFF00E5FF),
-                            bgColor: const Color(0xFF132228),
-                            borderColor: const Color(0xFF00E5FF).withOpacity(0.35),
-                            title: 'Web Link',
-                            value: 'Portals',
-                            valueColor: const Color(0xFF80D8FF),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(builder: (_) => const UpdatedWebLinkScreen()),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-
-                        // 4. Ads Promotion
-                        Expanded(
-                          child: _buildActionTile(
-                            icon: Icons.campaign_rounded,
-                            iconColor: const Color(0xFFB388FF),
-                            bgColor: const Color(0xFF1F1728),
-                            borderColor: const Color(0xFFB388FF).withOpacity(0.35),
-                            title: 'Promotion',
-                            value: 'Ads Reels',
-                            valueColor: const Color(0xFFD1C4E9),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(builder: (_) => const AdsVideoScreen()),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 10),
             ],
           ),
         ),
@@ -459,41 +397,288 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildActionTile({
-    required IconData icon,
-    required Color iconColor,
-    required Color bgColor,
-    required Color borderColor,
-    required String title,
-    required String value,
-    required Color valueColor,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor),
-        ),
+  /// 📂 Instagram-Style EndDrawer for Quick Access & Creator Hub
+  Widget _buildProfileDrawer() {
+    final avatarLetter = _userName.trim().isNotEmpty ? _userName.trim()[0].toUpperCase() : 'C';
+
+    return Drawer(
+      backgroundColor: const Color(0xFF141418),
+      child: SafeArea(
         child: Column(
           children: [
-            Icon(icon, color: iconColor, size: 18),
-            const SizedBox(height: 3),
-            Text(title, style: const TextStyle(color: Colors.white60, fontSize: 10), maxLines: 1),
-            const SizedBox(height: 1),
-            Text(
-              value,
-              style: TextStyle(color: valueColor, fontSize: 11, fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            // Drawer Top Profile Card
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primaryPink.withOpacity(0.25),
+                    const Color(0xFF1A1A22),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: const Border(
+                  bottom: BorderSide(color: Colors.white10, width: 1),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [AppColors.primaryPink, Color(0xFFFF6584)],
+                          ),
+                          border: Border.all(color: Colors.white24, width: 1.5),
+                        ),
+                        child: Center(
+                          child: Text(
+                            avatarLetter,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _userName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _userHandle,
+                              style: const TextStyle(
+                                color: Color(0xFFFF6584),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Quick Wallet Card inside Drawer
+                  InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop(); // Close drawer
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const WalletScreen()),
+                      ).then((_) => _loadProfileData());
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF261822),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.primaryPink.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryPink.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.account_balance_wallet_rounded,
+                              color: AppColors.primaryPink,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Wallet Balance',
+                                  style: TextStyle(color: Colors.white60, fontSize: 10),
+                                ),
+                                Text(
+                                  _walletBalance,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 13),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Navigation Items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      'CREATOR TOOLS',
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  _buildDrawerTile(
+                    icon: Icons.video_library_rounded,
+                    iconColor: const Color(0xFFFF8008),
+                    title: 'Video Studio',
+                    subtitle: 'Manage & view all uploaded videos',
+                    badge: _totalVideos > 0 ? '$_totalVideos' : null,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const UploadedVideoScreen()),
+                      ).then((_) => _loadProfileData());
+                    },
+                  ),
+                  _buildDrawerTile(
+                    icon: Icons.add_circle_outline_rounded,
+                    iconColor: AppColors.primaryPink,
+                    title: 'Upload Reel',
+                    subtitle: 'Publish music, reels & videos',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
+                      ).then((_) => _loadProfileData());
+                    },
+                  ),
+                  _buildDrawerTile(
+                    icon: Icons.link_rounded,
+                    iconColor: const Color(0xFF00E5FF),
+                    title: 'Web Links',
+                    subtitle: 'Configure external bio links',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const UpdatedWebLinkScreen()),
+                      ).then((_) => _loadProfileData());
+                    },
+                  ),
+                  _buildDrawerTile(
+                    icon: Icons.campaign_rounded,
+                    iconColor: const Color(0xFFB388FF),
+                    title: 'Ads Promotion',
+                    subtitle: 'Sponsored campaigns & ads',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const AdsVideoScreen()),
+                      ).then((_) => _loadProfileData());
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // Drawer Footer (Logout)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.white10, width: 1)),
+              ),
+              child: ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                tileColor: const Color(0xFF1E1E24),
+                leading: _isLoggingOut
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Icon(Icons.logout_rounded, color: Color(0xFFFF5252), size: 22),
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(color: Color(0xFFFF5252), fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                onTap: _isLoggingOut ? null : _logout,
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDrawerTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    String? badge,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: Colors.white38, fontSize: 11),
+      ),
+      trailing: badge != null
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                badge,
+                style: TextStyle(color: iconColor, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            )
+          : const Icon(Icons.chevron_right_rounded, color: Colors.white24, size: 20),
     );
   }
 
@@ -520,7 +705,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ─────────────────────────────────────────
   // My Videos Upload Management Section
   // ─────────────────────────────────────────
-  Widget _buildUploadedVideosSection() {
+  Widget _buildUploadedVideosSection(List<Map<String, dynamic>> videos) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -528,15 +713,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Uploaded Videos (5)',
-              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+            Text(
+              'Uploaded Videos (${videos.length})',
+              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
             ),
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
-                );
+                ).then((_) => _loadProfileData());
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryPink,
@@ -550,162 +735,336 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Video Rows
-        ..._uploadedManagementVideos.map((video) => _buildUploadedVideoCard(video)),
+        if (videos.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161620),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.04)),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.video_library_outlined, size: 48, color: Colors.white24),
+                const SizedBox(height: 12),
+                const Text(
+                  'No Videos Uploaded Yet',
+                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Upload your first video to start earning and gaining followers!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
+                    ).then((_) => _loadProfileData());
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryPink,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Upload Your First Video 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          )
+        else
+          ...videos.map((video) => _buildUploadedVideoCard(video, videos)),
       ],
     );
   }
 
-  Widget _buildUploadedVideoCard(Map<String, dynamic> video) {
-    final bool isApproved = video['status'] == 'Approved';
+  Widget _buildUploadedVideoCard(Map<String, dynamic> video, List<Map<String, dynamic>> allVideos) {
+    final statusStr = video['status']?.toString() ?? 'Approved';
+    final bool isApproved = statusStr.toLowerCase() == 'approved';
+    final titleStr = video['title']?.toString() ?? 'Untitled Reel';
+    final subjectStr = video['subject']?.toString().isNotEmpty == true
+        ? video['subject'].toString()
+        : (video['category']?.toString() ?? 'Reel');
+    final viewsCount = int.tryParse(video['view_count']?.toString() ?? video['views']?.toString() ?? '') ?? 0;
+    final likesCount = int.tryParse(video['likes_count']?.toString() ?? video['likes']?.toString() ?? '') ?? 0;
+    final createdStr = video['created_at']?.toString() ?? '';
+    final thumbUrl = _getThumbnailUrl(video);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161620),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
-      ),
-      child: Row(
-        children: [
-          // Video Thumbnail Placeholder
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFD70F64), Color(0xFF8A2387)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: const Center(
-                child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 28),
-              ),
+    String dateLabel = '';
+    if (createdStr.isNotEmpty) {
+      try {
+        final d = DateTime.parse(createdStr).toLocal();
+        dateLabel = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+      } catch (_) {
+        dateLabel = createdStr.substring(0, 10.clamp(0, createdStr.length));
+      }
+    }
+
+    return InkWell(
+      onTap: () {
+        final idx = allVideos.indexOf(video);
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ProfileReelsViewerScreen(
+              videos: allVideos,
+              initialIndex: idx >= 0 ? idx : 0,
+              onLikedStateChanged: _loadProfileData,
             ),
           ),
-          const SizedBox(width: 12),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161620),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
+        ),
+        child: Row(
+          children: [
+            // Video Thumbnail
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: 64,
+                height: 64,
+                color: const Color(0xFF261822),
+                child: thumbUrl != null
+                    ? Image.network(
+                        thumbUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _buildFallbackThumbnail(),
+                      )
+                    : _buildFallbackThumbnail(),
+              ),
+            ),
+            const SizedBox(width: 12),
 
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        video['title'] as String,
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isApproved ? const Color(0xFF00E676).withOpacity(0.15) : const Color(0xFFFF9100).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        video['status'] as String,
-                        style: TextStyle(
-                          color: isApproved ? const Color(0xFF00E676) : const Color(0xFFFF9100),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          titleStr,
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  video['subject'] as String,
-                  style: const TextStyle(color: Color(0xFFFF6584), fontSize: 11, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.remove_red_eye_rounded, size: 12, color: Colors.white38),
-                    const SizedBox(width: 4),
-                    Text(video['views'].toString(), style: const TextStyle(color: Colors.white60, fontSize: 11)),
-                    const SizedBox(width: 14),
-                    const Icon(Icons.favorite_rounded, size: 12, color: Colors.white38),
-                    const SizedBox(width: 4),
-                    Text(video['likes'].toString(), style: const TextStyle(color: Colors.white60, fontSize: 11)),
-                    const Spacer(),
-                    Text(
-                      video['uploadedAt'] as String,
-                      style: const TextStyle(color: Colors.white38, fontSize: 10),
-                    ),
-                  ],
-                ),
-              ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isApproved ? const Color(0xFF00E676).withOpacity(0.15) : const Color(0xFFFF9100).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          statusStr,
+                          style: TextStyle(
+                            color: isApproved ? const Color(0xFF00E676) : const Color(0xFFFF9100),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subjectStr,
+                    style: const TextStyle(color: Color(0xFFFF6584), fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.remove_red_eye_rounded, size: 12, color: Colors.white38),
+                      const SizedBox(width: 4),
+                      Text(_formatCount(viewsCount), style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                      const SizedBox(width: 14),
+                      const Icon(Icons.favorite_rounded, size: 12, color: Colors.white38),
+                      const SizedBox(width: 4),
+                      Text(_formatCount(likesCount), style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                      if (dateLabel.isNotEmpty) ...[
+                        const Spacer(),
+                        Text(
+                          dateLabel,
+                          style: const TextStyle(color: Colors.white38, fontSize: 10),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildVideoGrid(List<Map<String, dynamic>> items) {
+  Widget _buildFallbackThumbnail() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFD70F64), Color(0xFF8A2387)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(
+        child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 28),
+      ),
+    );
+  }
+
+  /// 🎬 Reels Grid with Real Video Thumbnails & Full-Screen Player on Tap
+  Widget _buildReelsGrid(List<Map<String, dynamic>> items, {bool isLikedTab = false}) {
+    if (items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isLikedTab ? Icons.favorite_border_rounded : Icons.grid_on_rounded,
+                size: 52,
+                color: Colors.white24,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                isLikedTab ? 'No Liked Videos' : 'No Reels Uploaded',
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                isLikedTab
+                    ? 'Double-tap any reel to like and see it here!'
+                    : 'Your uploaded reels will appear here.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
-        childAspectRatio: 0.75,
+        childAspectRatio: 0.72,
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final video = items[index];
-        final List<Color> colors = video['gradient'] as List<Color>;
+        final gradient = _gridGradients[index % _gridGradients.length];
+        final viewsCount = int.tryParse(video['view_count']?.toString() ?? video['views']?.toString() ?? '') ?? 0;
+        final likesCount = int.tryParse(video['likes_count']?.toString() ?? video['likes']?.toString() ?? '') ?? 0;
+        final thumbUrl = _getThumbnailUrl(video);
 
         return ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: colors,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Stack(
-              children: [
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.black.withOpacity(0.3),
-                    ),
-                    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+          child: InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ProfileReelsViewerScreen(
+                    videos: items,
+                    initialIndex: index,
+                    onLikedStateChanged: _loadProfileData,
                   ),
                 ),
+              );
+            },
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // 1. Thumbnail Image or Vibrant Gradient
+                if (thumbUrl != null)
+                  Image.network(
+                    thumbUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _buildFallbackGradient(gradient),
+                  )
+                else
+                  _buildFallbackGradient(gradient),
+
+                // 2. Dark Vignette Overlay
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.black.withOpacity(0.4),
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.7),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: const [0.0, 0.45, 1.0],
+                    ),
+                  ),
+                ),
+
+                // 3. Center Play Icon
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withOpacity(0.4),
+                    ),
+                    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
+                  ),
+                ),
+
+                // 4. Top Reel Title
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  right: 8,
+                  child: Text(
+                    video['title']?.toString() ?? '',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+
+                // 5. Bottom Views & Likes Stats
                 Positioned(
                   bottom: 8,
                   left: 8,
                   right: 8,
                   child: Row(
                     children: [
-                      const Icon(Icons.remove_red_eye_rounded, size: 12, color: Colors.white70),
-                      const SizedBox(width: 4),
-                      Text(
-                        video['views'].toString(),
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      const Icon(Icons.favorite_rounded, size: 12, color: Colors.white70),
+                      const Icon(Icons.remove_red_eye_rounded, size: 11, color: Colors.white70),
                       const SizedBox(width: 3),
                       Text(
-                        video['likes'].toString(),
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        _formatCount(viewsCount),
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      const Icon(Icons.favorite_rounded, size: 11, color: Colors.white70),
+                      const SizedBox(width: 3),
+                      Text(
+                        _formatCount(likesCount),
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -715,6 +1074,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildFallbackGradient(List<Color> gradient) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
     );
   }
 }

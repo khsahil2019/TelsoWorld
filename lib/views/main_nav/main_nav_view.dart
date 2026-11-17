@@ -30,14 +30,6 @@ class _MainNavViewState extends State<MainNavView> {
   final MainNavController controller = Get.find<MainNavController>();
   DateTime? _lastBackPressTime;
 
-  static final List<Widget> _screens = [
-    const FeedScreen(),
-    const DiscoveryScreen(),
-    const ReelUploadScreen(),
-    const InboxScreen(),
-    const ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -73,10 +65,19 @@ class _MainNavViewState extends State<MainNavView> {
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: Obx(() => IndexedStack(
-              index: controller.currentIndex.value,
-              children: _screens,
-            )),
+        body: Obx(() {
+          final currentTab = controller.currentIndex.value;
+          return IndexedStack(
+            index: currentTab,
+            children: [
+              FeedScreen(visible: currentTab == 0),
+              const DiscoveryScreen(),
+              const ReelUploadScreen(),
+              const InboxScreen(),
+              const ProfileScreen(),
+            ],
+          );
+        }),
         bottomNavigationBar: Obx(() => _buildCustomBottomBar()),
       ),
     );

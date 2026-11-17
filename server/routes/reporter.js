@@ -8,6 +8,7 @@ const {
   normalizeMediaUrl,
   toRelativeMediaPath,
   ensureMp4PlayableWithSound,
+  generateVideoThumbnail,
 } = require('../utils/media');
 
 const router = express.Router();
@@ -157,7 +158,7 @@ const handleRecordView = async (req, res) => {
   });
 };
 
-router.post('/normal-video/view', authOptional, handleRecordView);
+router.post(['/normal-video/view', '/video/view'], authOptional, handleRecordView);
 router.post('/adsvideo/view', authOptional, handleRecordView);
 
 /**
@@ -171,7 +172,7 @@ const handleToggleLike = async (req, res) => {
     return res.status(422).json({ status: false, message: 'video_id is required' });
   }
 
-  const userId = req.user ? req.user.id : (req.body.user_id ? parseInt(req.body.user_id, 10) : 1);
+  const userId = req.user ? req.user.id : (req.body.user_id ? parseInt(req.body.user_id, 10) : 8);
   const result = await db.toggleVideoLike(videoId, userId);
 
   if (!result) {
@@ -183,12 +184,13 @@ const handleToggleLike = async (req, res) => {
     message: result.liked ? 'Video liked' : 'Video unliked',
     liked: result.liked,
     is_liked: result.liked,
+    action: result.liked ? 'liked' : 'unliked',
     likes_count: result.likes_count,
     reward_info: result.reward_info,
   });
 };
 
-router.post('/normal-video/like', authOptional, handleToggleLike);
+router.post(['/normal-video/like', '/video/like'], authOptional, handleToggleLike);
 router.post('/adsvideo/like', authOptional, handleToggleLike);
 
 /**
@@ -206,8 +208,11 @@ router.get('/creator-stats', authOptional, async (req, res) => {
  * Returns full profile info for the logged-in user
  */
 router.get('/profile', authOptional, async (req, res) => {
-  const userId = req.user ? req.user.id : (req.query.user_id || 1);
+  const userId = req.user ? req.user.id : (req.query.user_id || 8);
   const user = (await db.findUserById(userId)) || (await db.getUsers())[0];
+  if (!user) {
+    return res.status(404).json({ status: false, message: 'No user profile found' });
+  }
   const stats = await db.getCreatorStats(user.id);
   const wallet = await db.getWallet(user.id);
 
@@ -222,15 +227,42 @@ router.get('/profile', authOptional, async (req, res) => {
       whatsapp: user.whatsapp || user.mobile_no,
       dob: user.dob,
       bio: user.bio || 'Official Creator on Telso World 🎵 Singer, Music Producer & Live Performer.',
+      profile_image: user.profile_image || '',
       verified: true,
-      subscribers_count: stats.subscribers_count || 52,
-      total_videos: stats.total_videos,
-      total_likes: stats.total_likes,
-      total_views: stats.total_views,
+      followers_count: stats.followers_count || 0,
+      following_count: stats.following_count || 0,
+      subscribers_count: stats.followers_count || 0,
+      total_videos: stats.total_videos || 0,
+      total_likes: stats.total_likes || 0,
+      total_views: stats.total_views || 0,
+      approved_count: stats.approved_count || 0,
+      pending_count: stats.pending_count || 0,
       wallet_balance: wallet.balance,
       referral_code: user.referral_code || 'TELSO2026',
       videos: (stats.videos || []).map(v => formatVideoResponse(req, v)),
+      liked_videos: (stats.liked_videos || []).map(v => formatVideoResponse(req, v)),
     },
+  });
+});
+
+/**
+ * 🤝 POST /api/reporter/follow/:id
+ * Toggle follow/unfollow for a creator
+ */
+router.post('/follow/:id', authOptional, async (req, res) => {
+  const currentUserId = req.user ? req.user.id : (req.body.user_id || 8);
+  const targetId = parseInt(req.params.id, 10);
+  if (!targetId || targetId === currentUserId) {
+    return res.status(400).json({ status: false, message: 'Invalid target user' });
+  }
+
+  const result = await db.toggleFollow(currentUserId, targetId);
+  const followersCount = await db.getFollowersCount(targetId);
+  return res.status(200).json({
+    status: true,
+    following: result.following,
+    followers_count: followersCount,
+    message: result.following ? 'Followed successfully! ✨' : 'Unfollowed successfully.',
   });
 });
 
@@ -376,6 +408,20 @@ router.post(
         const mediaCheck = await ensureMp4PlayableWithSound(videoFile.path);
         hasAudio = mediaCheck.hasAudio;
         videoUrl = `/uploads/videos/${videoFile.filename}`;
+
+        // Auto-extract video thumbnail if none was explicitly uploaded
+        if (!thumbFile) {
+          const thumbDir = path.join(__dirname, '..', 'uploads', 'thumbnails');
+          if (!fs.existsSync(thumbDir)) {
+            fs.mkdirSync(thumbDir, { recursive: true });
+          }
+          const generatedThumbName = `${path.parse(videoFile.filename).name}_thumb.jpg`;
+          const generatedThumbPath = path.join(thumbDir, generatedThumbName);
+          const ok = await generateVideoThumbnail(videoFile.path, generatedThumbPath);
+          if (ok) {
+            thumbUrl = `/uploads/thumbnails/${generatedThumbName}`;
+          }
+        }
       }
       if (thumbFile) {
         thumbUrl = `/uploads/thumbnails/${thumbFile.filename}`;
@@ -404,6 +450,8 @@ router.post(
         thumbnail_url: storedThumbPath,
         image: storedThumbPath,
         video_type: videoType,
+        target_url: req.body.target_url || req.body.link || '',
+        budget: parseFloat(req.body.budget) || 0.0,
         has_audio: hasAudio,
         status: 'Pending', // Sent to Admin approval list first!
         audio_title: `Original Audio - ${user ? (user.name || user.username) : 'Telso Creator'}`,

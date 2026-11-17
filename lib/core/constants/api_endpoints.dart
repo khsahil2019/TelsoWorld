@@ -79,4 +79,8 @@ class ApiEndpoints {
   // Wallet & Referral
   static const String wallet = '/reporter/wallet';
   static const String referral = '/reporter/referral';
+
+  // Profile & Creator
+  static const String profile = '/reporter/profile';
+  static const String follow = '/reporter/follow';
 }
