@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -18,10 +19,20 @@ class UploadController extends GetxController {
   final descriptionController = TextEditingController();
 
   Future<void> pickVideo() async {
-    final XFile? file = await _picker.pickVideo(source: ImageSource.gallery);
-    if (file != null) {
-      selectedVideo.value = File(file.path);
-    }
+    try {
+      final XFile? file = await _picker.pickVideo(source: ImageSource.gallery);
+      if (file != null) {
+        selectedVideo.value = File(file.path);
+        return;
+      }
+    } catch (_) {}
+
+    try {
+      final res = await FilePicker.platform.pickFiles(type: FileType.video);
+      if (res != null && res.files.single.path != null) {
+        selectedVideo.value = File(res.files.single.path!);
+      }
+    } catch (_) {}
   }
 
   Future<void> uploadVideo() async {

@@ -52,13 +52,15 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
     try {
       final token = await SessionTokenStore.getToken();
       final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/my-videos');
-      final res = await http.get(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 8));
+      final res = await http
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -72,12 +74,16 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
                 ? 'http://${ApiEndpoints.host}$rawUrl'
                 : rawUrl;
             return VideoEntry(
-              id: item['id'] is int ? item['id'] : int.tryParse(item['id'].toString()) ?? 0,
+              id: item['id'] is int
+                  ? item['id']
+                  : int.tryParse(item['id'].toString()) ?? 0,
               subject: item['subject']?.toString() ?? '',
               title: item['title']?.toString() ?? 'Reel',
               previewLabel: item['video_path']?.toString() ?? 'video.mp4',
               videoUrl: resolvedUrl,
-              uploadedAt: item['created_at'] != null ? item['created_at'].toString() : 'Just now',
+              uploadedAt: item['created_at'] != null
+                  ? item['created_at'].toString()
+                  : 'Just now',
               status: item['status']?.toString() ?? 'Approved',
               views: (item['view_count'] ?? 0).toString(),
               likes: (item['likes_count'] is int ? item['likes_count'] : 0),
@@ -92,8 +98,7 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
           }
         }
       }
-    } catch (_) {
-    }
+    } catch (_) {}
   }
 
   final List<VideoEntry> _videos = [
@@ -177,7 +182,8 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
       }
       if (_searchQuery.isEmpty) return true;
       final q = _searchQuery.toLowerCase();
-      return v.title.toLowerCase().contains(q) || v.subject.toLowerCase().contains(q);
+      return v.title.toLowerCase().contains(q) ||
+          v.subject.toLowerCase().contains(q);
     }).toList();
 
     final approvedCount = _videos.where((v) => v.status == 'Approved').length;
@@ -190,13 +196,21 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
         elevation: 0,
         leading: Navigator.canPop(context)
             ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 onPressed: () => Navigator.of(context).pop(),
               )
             : const Icon(Icons.video_library_rounded, color: Colors.white),
         title: const Text(
           'Creator Video Studio',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+          ),
         ),
         actions: [
           Padding(
@@ -204,18 +218,33 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
             child: ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ReelUploadScreen(),
+                  ),
                 );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryPink,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
-              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+              icon: const Icon(
+                Icons.add_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
               label: const Text(
                 'Upload',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
               ),
             ),
           ),
@@ -242,7 +271,11 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
               decoration: const InputDecoration(
                 hintText: 'Search video by title or subject...',
                 hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
-                prefixIcon: Icon(Icons.search_rounded, color: AppColors.primaryPink, size: 20),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  color: AppColors.primaryPink,
+                  size: 20,
+                ),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(vertical: 11),
               ),
@@ -282,7 +315,9 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: AppColors.primaryPink.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: AppColors.primaryPink.withValues(alpha: 0.25),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,27 +333,50 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
                       color: AppColors.primaryPink.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.auto_graph_rounded, color: AppColors.primaryPink, size: 18),
+                    child: const Icon(
+                      Icons.auto_graph_rounded,
+                      color: AppColors.primaryPink,
+                      size: 18,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   const Text(
                     'Creator Channel Analytics',
-                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
-              const Text('Live Stats', style: TextStyle(color: Colors.white38, fontSize: 11)),
+              const Text(
+                'Live Stats',
+                style: TextStyle(color: Colors.white38, fontSize: 11),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildMetricItem('${_videos.length}', 'TOTAL VIDEOS', Colors.white),
+              _buildMetricItem(
+                '${_videos.length}',
+                'TOTAL VIDEOS',
+                Colors.white,
+              ),
               Container(width: 1, height: 30, color: Colors.white10),
-              _buildMetricItem('$approved', 'APPROVED', const Color(0xFF00E676)),
+              _buildMetricItem(
+                '$approved',
+                'APPROVED',
+                const Color(0xFF00E676),
+              ),
               Container(width: 1, height: 30, color: Colors.white10),
-              _buildMetricItem('$pending', 'IN REVIEW', const Color(0xFFFF9100)),
+              _buildMetricItem(
+                '$pending',
+                'IN REVIEW',
+                const Color(0xFFFF9100),
+              ),
               Container(width: 1, height: 30, color: Colors.white10),
               _buildMetricItem('187K', 'TOTAL VIEWS', Colors.cyanAccent),
             ],
@@ -333,12 +391,21 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
       children: [
         Text(
           value,
-          style: TextStyle(color: valueColor, fontSize: 16, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: valueColor,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
         ),
         const SizedBox(height: 3),
         Text(
           label,
-          style: const TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+          style: const TextStyle(
+            color: Colors.white38,
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
         ),
       ],
     );
@@ -354,7 +421,9 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primaryPink : const Color(0xFF181822),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? AppColors.primaryPink : Colors.white10),
+          border: Border.all(
+            color: isSelected ? AppColors.primaryPink : Colors.white10,
+          ),
         ),
         child: Text(
           '$label ($count)',
@@ -389,113 +458,161 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
       onTap: () => _openVideoPreview(video),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161620),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Thumbnail Box
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFD70F64), Color(0xFF8A2387)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161620),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Thumbnail Box
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFD70F64), Color(0xFF8A2387)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                 ),
-              ),
-              child: Stack(
-                children: [
-                  const Center(
-                    child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
-                  ),
-                  Positioned(
-                    bottom: 4,
-                    right: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text('0:45', style: TextStyle(color: Colors.white, fontSize: 9)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Stack(
                   children: [
-                    Expanded(
-                      child: Text(
-                        video.title,
-                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    const Center(
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 32,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isApproved
-                            ? const Color(0xFF00E676).withValues(alpha: 0.15)
-                            : const Color(0xFFFF9100).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        video.status,
-                        style: TextStyle(
-                          color: isApproved ? const Color(0xFF00E676) : const Color(0xFFFF9100),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                    Positioned(
+                      bottom: 4,
+                      right: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          '0:45',
+                          style: TextStyle(color: Colors.white, fontSize: 9),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  video.subject,
-                  style: const TextStyle(color: Color(0xFFFF6584), fontSize: 11, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.remove_red_eye_rounded, size: 13, color: Colors.white38),
-                    const SizedBox(width: 4),
-                    Text(video.views, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-                    const SizedBox(width: 12),
-                    const Icon(Icons.favorite_rounded, size: 13, color: Color(0xFFFF2A6D)),
-                    const SizedBox(width: 4),
-                    Text('${video.likes}', style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-                    const Spacer(),
-                    Text(
-                      video.uploadedAt,
-                      style: const TextStyle(color: Colors.white38, fontSize: 10),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(width: 14),
+
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          video.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isApproved
+                              ? const Color(0xFF00E676).withValues(alpha: 0.15)
+                              : const Color(0xFFFF9100).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          video.status,
+                          style: TextStyle(
+                            color: isApproved
+                                ? const Color(0xFF00E676)
+                                : const Color(0xFFFF9100),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    video.subject,
+                    style: const TextStyle(
+                      color: Color(0xFFFF6584),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.remove_red_eye_rounded,
+                        size: 13,
+                        color: Colors.white38,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        video.views,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Icon(
+                        Icons.favorite_rounded,
+                        size: 13,
+                        color: Color(0xFFFF2A6D),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${video.likes}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        video.uploadedAt,
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -506,9 +623,16 @@ class _UploadedVideoScreenState extends State<UploadedVideoScreen> {
       alignment: Alignment.center,
       child: Column(
         children: const [
-          Icon(Icons.video_collection_outlined, size: 48, color: Colors.white24),
+          Icon(
+            Icons.video_collection_outlined,
+            size: 48,
+            color: Colors.white24,
+          ),
           SizedBox(height: 12),
-          Text('No videos found in this filter', style: TextStyle(color: Colors.white54, fontSize: 14)),
+          Text(
+            'No videos found in this filter',
+            style: TextStyle(color: Colors.white54, fontSize: 14),
+          ),
         ],
       ),
     );
@@ -629,80 +753,85 @@ class _StudioVideoPreviewDialogState extends State<_StudioVideoPreviewDialog> {
                           child: Text(
                             _errorText!,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       )
                     : !_initialized || c == null
-                        ? const Center(
-                            child: CircularProgressIndicator(color: Color(0xFFD70F64)),
-                          )
-                        : GestureDetector(
-                            onTap: _togglePlay,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Center(
-                                  child: AspectRatio(
-                                    aspectRatio: c.value.aspectRatio > 0
-                                        ? c.value.aspectRatio
-                                        : 9 / 16,
-                                    child: VideoPlayer(c),
-                                  ),
-                                ),
-                                if (!c.value.isPlaying)
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.black54,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.play_arrow_rounded,
-                                      color: Colors.white,
-                                      size: 36,
-                                    ),
-                                  ),
-                                Positioned(
-                                  right: 10,
-                                  bottom: 14,
-                                  child: GestureDetector(
-                                    onTap: _toggleMute,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white24),
-                                      ),
-                                      child: Icon(
-                                        _isMuted
-                                            ? Icons.volume_off_rounded
-                                            : Icons.volume_up_rounded,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  child: VideoProgressIndicator(
-                                    c,
-                                    allowScrubbing: true,
-                                    padding: EdgeInsets.zero,
-                                    colors: const VideoProgressColors(
-                                      playedColor: Color(0xFFD70F64),
-                                      bufferedColor: Colors.white24,
-                                      backgroundColor: Colors.white12,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFD70F64),
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: _togglePlay,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Center(
+                              child: AspectRatio(
+                                aspectRatio: c.value.aspectRatio > 0
+                                    ? c.value.aspectRatio
+                                    : 9 / 16,
+                                child: VideoPlayer(c),
+                              ),
                             ),
-                          ),
+                            if (!c.value.isPlaying)
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 36,
+                                ),
+                              ),
+                            Positioned(
+                              right: 10,
+                              bottom: 14,
+                              child: GestureDetector(
+                                onTap: _toggleMute,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white24),
+                                  ),
+                                  child: Icon(
+                                    _isMuted
+                                        ? Icons.volume_off_rounded
+                                        : Icons.volume_up_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: VideoProgressIndicator(
+                                c,
+                                allowScrubbing: true,
+                                padding: EdgeInsets.zero,
+                                colors: const VideoProgressColors(
+                                  playedColor: Color(0xFFD70F64),
+                                  bufferedColor: Colors.white24,
+                                  backgroundColor: Colors.white12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 10),

@@ -6,7 +6,11 @@ import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/constants/app_colors.dart';
 import 'package:telsoworld/core/routes/app_routes.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
+import 'package:telsoworld/core/services/storage_service.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:telsoworld/views/ads/ads_view.dart';
+import 'package:telsoworld/views/profile/followers_following_screen.dart';
+import 'package:telsoworld/views/profile/edit_profile_screen.dart';
 import 'package:telsoworld/views/profile/profile_reels_viewer_screen.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
 import 'package:telsoworld/views/upload/uploaded_video_view.dart';
@@ -33,6 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _userHandle = '@creator';
   String _bio = 'Official Creator on Telso World 🎵';
   String _walletBalance = '₹0.00';
+  String _profileImageUrl = '';
   int _totalVideos = 0;
   int _followersCount = 0;
   int _followingCount = 0;
@@ -40,6 +45,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   List<Map<String, dynamic>> _userReels = [];
   List<Map<String, dynamic>> _likedReels = [];
+  List<Map<String, dynamic>> _highlights = [];
+
+  void _openFollowersScreen(int tabIndex) {
+    final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+    final userId = storage?.getUserId() ?? 1;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => FollowersFollowingScreen(
+          userId: userId,
+          username: _userHandle.replaceAll('@', ''),
+          initialTab: tabIndex,
+        ),
+      ),
+    ).then((_) => _loadProfileData());
+  }
+
+  void _openEditProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute<bool>(
+        builder: (_) => EditProfileScreen(
+          currentName: _userName,
+          currentUsername: _userHandle.replaceAll('@', ''),
+          currentBio: _bio,
+          currentAvatar: _profileImageUrl,
+        ),
+      ),
+    ).then((updated) {
+      if (updated == true) {
+        _loadProfileData();
+      }
+    });
+  }
+
+  void _shareProfile() {
+    final handle = _userHandle.replaceAll('@', '');
+    Share.share(
+      'Check out @$handle on Telso World! ✨\nhttps://telsoworld.com/profile/$handle',
+      subject: 'Telso World Profile',
+    );
+  }
 
   final List<List<Color>> _gridGradients = const [
     [Color(0xFF8A2387), Color(0xFFE94057)],
@@ -66,12 +111,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String? _getThumbnailUrl(Map<String, dynamic> video) {
-    final raw = video['thumbnail_url'] ?? video['image'];
+    final raw = (video['thumbnail_url']?.toString().trim().isNotEmpty == true ? video['thumbnail_url'] : null) ??
+        (video['image']?.toString().trim().isNotEmpty == true ? video['image'] : null) ??
+        (video['photo_url']?.toString().trim().isNotEmpty == true ? video['photo_url'] : null) ??
+        (video['video_url']?.toString().trim().isNotEmpty == true ? video['video_url'] : null) ??
+        (video['video_path']?.toString().trim().isNotEmpty == true ? video['video_path'] : null);
     if (raw == null) return null;
     final str = raw.toString().trim();
     if (str.isEmpty) return null;
-    if (str.startsWith('http://') || str.startsWith('https://')) return str;
-    return '${ApiEndpoints.baseUrl}${str.startsWith('/') ? str : '/$str'}';
+    return ApiEndpoints.mediaUrl(str);
   }
 
   Future<void> _loadProfileData() async {
@@ -82,20 +130,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      final profileResponse = await http.get(
-        Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.profile}'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 15));
+      final profileResponse = await http
+          .get(
+            Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.profile}'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (profileResponse.statusCode == 200) {
         final json = jsonDecode(profileResponse.body);
         if (mounted && json is Map && json['data'] is Map) {
           final d = json['data'] as Map<String, dynamic>;
-          final rawVideos = (d['videos'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
-          final rawLiked = (d['liked_videos'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
+          final rawVideos =
+              (d['videos'] as List?)
+                  ?.whereType<Map<String, dynamic>>()
+                  .toList() ??
+              [];
+          final rawLiked =
+              (d['liked_videos'] as List?)
+                  ?.whereType<Map<String, dynamic>>()
+                  .toList() ??
+              [];
 
           setState(() {
             _userName = d['name']?.toString().trim().isNotEmpty == true
@@ -107,9 +165,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ? d['bio'].toString().trim()
                 : 'Official Creator on Telso World 🎵';
             _walletBalance = '₹${d['wallet_balance'] ?? '0.00'}';
-            _totalVideos = int.tryParse(d['total_videos']?.toString() ?? '') ?? rawVideos.length;
-            _followersCount = int.tryParse(d['followers_count']?.toString() ?? '') ?? 0;
-            _followingCount = int.tryParse(d['following_count']?.toString() ?? '') ?? 0;
+            final img = d['profile_image']?.toString() ?? '';
+            _profileImageUrl = img;
+            if (img.isNotEmpty) {
+              final storage = Get.isRegistered<StorageService>()
+                  ? Get.find<StorageService>()
+                  : null;
+              storage?.setProfileImage(img);
+            }
+            _totalVideos =
+                int.tryParse(d['total_videos']?.toString() ?? '') ??
+                rawVideos.length;
+            _followersCount =
+                int.tryParse(d['followers_count']?.toString() ?? '') ?? 0;
+            _followingCount =
+                int.tryParse(d['following_count']?.toString() ?? '') ?? 0;
             _totalLikes = int.tryParse(d['total_likes']?.toString() ?? '') ?? 0;
             _userReels = rawVideos;
             _likedReels = rawLiked;
@@ -131,17 +201,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Logout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to log out from Telso World?', style: TextStyle(color: Colors.white70)),
+        title: const Text(
+          'Logout',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Are you sure you want to log out from Telso World?',
+          style: TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white60),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryPink),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryPink,
+            ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Logout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Logout',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -153,10 +240,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final token = await SessionTokenStore.getToken();
       if (token.isNotEmpty) {
-        await http.post(
-          Uri.parse('${ApiEndpoints.baseUrl}/reporter/logout'),
-          headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
-        ).timeout(const Duration(seconds: 15));
+        await http
+            .post(
+              Uri.parse('${ApiEndpoints.baseUrl}/reporter/logout'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Accept': 'application/json',
+              },
+            )
+            .timeout(const Duration(seconds: 15));
       }
     } catch (_) {}
 
@@ -170,7 +262,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: const Color(0xFF0F0F12),
@@ -188,32 +280,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Container(
                   decoration: const BoxDecoration(
                     color: Color(0xFF141418),
-                    border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
+                    border: Border(
+                      bottom: BorderSide(color: Colors.white10, width: 1),
+                    ),
                   ),
                   child: const TabBar(
                     indicatorColor: AppColors.primaryPink,
                     indicatorWeight: 3,
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white54,
-                    labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                    unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    labelStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                    unselectedLabelStyle: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                     tabs: [
-                      Tab(icon: Icon(Icons.grid_on_rounded, size: 18), text: 'Reels'),
-                      Tab(icon: Icon(Icons.video_library_rounded, size: 18), text: 'My Videos'),
-                      Tab(icon: Icon(Icons.favorite_rounded, size: 18), text: 'Liked'),
+                      Tab(
+                        icon: Icon(Icons.grid_on_rounded, size: 18),
+                        text: 'Posts',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.movie_outlined, size: 18),
+                        text: 'Reels',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.photo_library_outlined, size: 18),
+                        text: 'Photos',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.campaign_outlined, size: 18),
+                        text: 'Ads',
+                      ),
                     ],
                   ),
                 ),
                 Expanded(
                   child: _isLoading
                       ? const Center(
-                          child: CircularProgressIndicator(color: AppColors.primaryPink, strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            color: AppColors.primaryPink,
+                            strokeWidth: 2,
+                          ),
                         )
                       : TabBarView(
                           children: [
+                            // 1. Posts (All media)
                             _buildReelsGrid(_userReels),
-                            _buildUploadedVideosSection(_userReels),
-                            _buildReelsGrid(_likedReels, isLikedTab: true),
+                            // 2. Reels (Only video reels)
+                            _buildReelsGrid(
+                              _userReels
+                                  .where(
+                                    (v) =>
+                                        (v['media_type']
+                                            ?.toString()
+                                            .toLowerCase() !=
+                                        'photo' &&
+                                         v['video_type']
+                                            ?.toString()
+                                            .toLowerCase() !=
+                                        'ads'),
+                                  )
+                                  .toList(),
+                            ),
+                            // 3. Photos (Only photos)
+                            _buildPhotosGrid(
+                              _userReels
+                                  .where(
+                                    (v) =>
+                                        (v['media_type']
+                                            ?.toString()
+                                            .toLowerCase() ==
+                                        'photo'),
+                                  )
+                                  .toList(),
+                            ),
+                            // 4. Ads (Only advertisements)
+                            _buildReelsGrid(
+                              _userReels
+                                  .where(
+                                    (v) =>
+                                        (v['video_type']
+                                            ?.toString()
+                                            .toLowerCase() ==
+                                        'ads'),
+                                  )
+                                  .toList(),
+                            ),
                           ],
                         ),
                 ),
@@ -227,7 +382,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// 🌟 Profile Header (Clean & Minimalist, Quick Tools Moved to Drawer)
   Widget _buildProfileHeader() {
-    final avatarLetter = _userName.trim().isNotEmpty ? _userName.trim()[0].toUpperCase() : 'C';
+    final avatarLetter = _userName.trim().isNotEmpty
+        ? _userName.trim()[0].toUpperCase()
+        : 'C';
 
     return Container(
       decoration: BoxDecoration(
@@ -257,7 +414,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: Colors.white.withOpacity(0.06),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_outline_rounded, color: Colors.white70, size: 20),
+                    child: const Icon(
+                      Icons.person_outline_rounded,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
                   ),
                   Text(
                     _userHandle,
@@ -269,7 +430,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+                    icon: const Icon(
+                      Icons.menu_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
                     tooltip: 'Creator Menu & Wallet',
                     onPressed: () {
                       _scaffoldKey.currentState?.openEndDrawer();
@@ -280,48 +445,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 12),
 
               // Avatar with Gradient Ring
-              Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  Container(
-                    width: 88,
-                    height: 88,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [AppColors.primaryPink, Color(0xFFFF6584), Color(0xFFFFC371)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryPink.withOpacity(0.4),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
+              GestureDetector(
+                onTap: _openEditProfile,
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [
+                            AppColors.primaryPink,
+                            Color(0xFFFF6584),
+                            Color(0xFFFFC371),
+                          ],
                         ),
-                      ],
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryPink.withOpacity(0.4),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(3),
+                      child: Container(
+                        width: 86,
+                        height: 86,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF1E1E24),
+                        ),
+                        child: ClipOval(
+                          child: _profileImageUrl.isNotEmpty
+                              ? Image.network(
+                                  ApiEndpoints.mediaUrl(_profileImageUrl),
+                                  width: 86,
+                                  height: 86,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Center(
+                                    child: Text(
+                                      avatarLetter,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 36,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    avatarLetter,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 36,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
                     ),
-                    padding: const EdgeInsets.all(3),
-                    child: Container(
+                    Container(
+                      padding: const EdgeInsets.all(5),
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Color(0xFF1E1E24),
+                        color: AppColors.primaryPink,
                       ),
-                      child: Center(
-                        child: Text(
-                          avatarLetter,
-                          style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
-                        ),
+                      child: const Icon(
+                        Icons.edit_rounded,
+                        color: Colors.white,
+                        size: 14,
                       ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.primaryPink,
-                    ),
-                    child: const Icon(Icons.verified_rounded, color: Colors.white, size: 15),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
 
@@ -336,11 +537,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primaryPink.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.primaryPink.withOpacity(0.5)),
+                  border: Border.all(
+                    color: AppColors.primaryPink.withOpacity(0.5),
+                  ),
                 ),
                 child: const Text(
                   'Verified Creator',
@@ -370,7 +576,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Real-Time Stats Row Card
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 16,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1A1A22),
                   borderRadius: BorderRadius.circular(16),
@@ -379,17 +588,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem(_totalVideos.toString(), 'VIDEOS'),
+                    _buildStatItem(_totalVideos.toString(), 'POSTS'),
                     _buildDivider(),
-                    _buildStatItem(_formatCount(_followersCount), 'FOLLOWERS'),
+                    GestureDetector(
+                      onTap: () => _openFollowersScreen(0),
+                      behavior: HitTestBehavior.opaque,
+                      child: _buildStatItem(_formatCount(_followersCount), 'FOLLOWERS'),
+                    ),
                     _buildDivider(),
-                    _buildStatItem(_formatCount(_followingCount), 'FOLLOWING'),
-                    _buildDivider(),
-                    _buildStatItem(_formatCount(_totalLikes), 'LIKES'),
+                    GestureDetector(
+                      onTap: () => _openFollowersScreen(1),
+                      behavior: HitTestBehavior.opaque,
+                      child: _buildStatItem(_formatCount(_followingCount), 'FOLLOWING'),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
+
+              // Edit Profile & Share Profile Action Buttons
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 34,
+                        child: ElevatedButton(
+                          onPressed: _openEditProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF262626),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: const Text(
+                            'Edit profile',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SizedBox(
+                        height: 34,
+                        child: ElevatedButton(
+                          onPressed: _shareProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF262626),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: const Text(
+                            'Share profile',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // 🌟 Story Highlights Row
+              _buildStoryHighlights(),
+              const SizedBox(height: 6),
             ],
           ),
         ),
@@ -397,9 +675,279 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showCreateHighlightDialog() {
+    final titleCtrl = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('New highlight', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: titleCtrl,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Highlight name (e.g. Memories, Travel)',
+            hintStyle: TextStyle(color: Colors.white38),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.primaryPink)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = titleCtrl.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.of(ctx).pop();
+                setState(() {
+                  _highlights.insert(0, {'title': name, 'cover_url': ''});
+                });
+                try {
+                  final token = await SessionTokenStore.getToken();
+                  final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/highlights');
+                  await http.post(
+                    uri,
+                    headers: {
+                      'Authorization': 'Bearer $token',
+                      'Accept': 'application/json',
+                      'Content-Type': 'application/json',
+                    },
+                    body: jsonEncode({'title': name}),
+                  );
+                } catch (_) {}
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryPink),
+            child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 🌟 Instagram Story Highlights Row (Dynamic + "New" Button)
+  Widget _buildStoryHighlights() {
+    return SizedBox(
+      height: 84,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: 1 + _highlights.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return GestureDetector(
+              onTap: _showCreateHighlightDialog,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white30, width: 1.5),
+                      color: const Color(0xFF1A1A22),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.add_rounded, color: Colors.white70, size: 28),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'New',
+                    style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final h = _highlights[index - 1];
+          final title = h['title']?.toString() ?? 'Highlight';
+          final cover = h['cover_url']?.toString() ?? '';
+
+          return GestureDetector(
+            onTap: () {
+              Get.snackbar(
+                title,
+                'Playing highlight collection 🌟',
+                backgroundColor: const Color(0xFF1E1E24),
+                colorText: Colors.white,
+                snackPosition: SnackPosition.BOTTOM,
+              );
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primaryPink, width: 1.5),
+                    color: const Color(0xFF1A1A22),
+                  ),
+                  child: ClipOval(
+                    child: cover.isNotEmpty
+                        ? Image.network(
+                            ApiEndpoints.mediaUrl(cover),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.star_rounded, color: Colors.white, size: 24),
+                          )
+                        : const Center(
+                            child: Icon(Icons.star_rounded, color: Colors.white, size: 24),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: 60,
+                  child: Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 📸 Photos Grid for Photos & Posts Tab
+  Widget _buildPhotosGrid(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.photo_library_outlined,
+                size: 44,
+                color: Colors.white24,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'No Photos Shared Yet',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Share photos with or without sound to see them here!',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context)
+                      .push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const ReelUploadScreen(initialMode: 'photo'),
+                        ),
+                      )
+                      .then((_) => _loadProfileData());
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryPink,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                ),
+                icon: const Icon(Icons.add_a_photo_rounded, size: 16),
+                label: const Text(
+                  'Post Photo',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(2),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 2,
+        mainAxisSpacing: 2,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final photo = items[index];
+        final photoUrl = _getThumbnailUrl(photo);
+        final hasAudio =
+            photo['has_audio'] != false && photo['has_audio'] != 'false';
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ProfileReelsViewerScreen(
+                  videos: items,
+                  initialIndex: index,
+                  onLikedStateChanged: _loadProfileData,
+                ),
+              ),
+            );
+          },
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (photoUrl != null)
+                Image.network(
+                  photoUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _buildFallbackThumbnail(),
+                )
+              else
+                _buildFallbackThumbnail(),
+              if (hasAudio)
+                const Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Icon(
+                    Icons.music_note_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   /// 📂 Instagram-Style EndDrawer for Quick Access & Creator Hub
   Widget _buildProfileDrawer() {
-    final avatarLetter = _userName.trim().isNotEmpty ? _userName.trim()[0].toUpperCase() : 'C';
+    final avatarLetter = _userName.trim().isNotEmpty
+        ? _userName.trim()[0].toUpperCase()
+        : 'C';
 
     return Drawer(
       backgroundColor: const Color(0xFF141418),
@@ -485,17 +1033,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   InkWell(
                     onTap: () {
                       Navigator.of(context).pop(); // Close drawer
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(builder: (_) => const WalletScreen()),
-                      ).then((_) => _loadProfileData());
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const WalletScreen(),
+                            ),
+                          )
+                          .then((_) => _loadProfileData());
                     },
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF261822),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.primaryPink.withOpacity(0.4)),
+                        border: Border.all(
+                          color: AppColors.primaryPink.withOpacity(0.4),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -518,7 +1075,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               children: [
                                 const Text(
                                   'Wallet Balance',
-                                  style: TextStyle(color: Colors.white60, fontSize: 10),
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 10,
+                                  ),
                                 ),
                                 Text(
                                   _walletBalance,
@@ -531,7 +1091,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ],
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 13),
+                          const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: Colors.white38,
+                            size: 13,
+                          ),
                         ],
                       ),
                     ),
@@ -565,9 +1129,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     badge: _totalVideos > 0 ? '$_totalVideos' : null,
                     onTap: () {
                       Navigator.of(context).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(builder: (_) => const UploadedVideoScreen()),
-                      ).then((_) => _loadProfileData());
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const UploadedVideoScreen(),
+                            ),
+                          )
+                          .then((_) => _loadProfileData());
                     },
                   ),
                   _buildDrawerTile(
@@ -577,9 +1145,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: 'Publish music, reels & videos',
                     onTap: () {
                       Navigator.of(context).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
-                      ).then((_) => _loadProfileData());
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const ReelUploadScreen(),
+                            ),
+                          )
+                          .then((_) => _loadProfileData());
                     },
                   ),
                   _buildDrawerTile(
@@ -589,9 +1161,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: 'Configure external bio links',
                     onTap: () {
                       Navigator.of(context).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(builder: (_) => const UpdatedWebLinkScreen()),
-                      ).then((_) => _loadProfileData());
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const UpdatedWebLinkScreen(),
+                            ),
+                          )
+                          .then((_) => _loadProfileData());
                     },
                   ),
                   _buildDrawerTile(
@@ -601,9 +1177,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: 'Sponsored campaigns & ads',
                     onTap: () {
                       Navigator.of(context).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(builder: (_) => const AdsVideoScreen()),
-                      ).then((_) => _loadProfileData());
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const AdsVideoScreen(),
+                            ),
+                          )
+                          .then((_) => _loadProfileData());
                     },
                   ),
                 ],
@@ -614,21 +1194,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.white10, width: 1)),
+                border: Border(
+                  top: BorderSide(color: Colors.white10, width: 1),
+                ),
               ),
               child: ListTile(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 tileColor: const Color(0xFF1E1E24),
                 leading: _isLoggingOut
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
                       )
-                    : const Icon(Icons.logout_rounded, color: Color(0xFFFF5252), size: 22),
+                    : const Icon(
+                        Icons.logout_rounded,
+                        color: Color(0xFFFF5252),
+                        size: 22,
+                      ),
                 title: const Text(
                   'Logout',
-                  style: TextStyle(color: Color(0xFFFF5252), fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(
+                    color: Color(0xFFFF5252),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
                 onTap: _isLoggingOut ? null : _logout,
               ),
@@ -660,7 +1255,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       title: Text(
         title,
-        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       subtitle: Text(
         subtitle,
@@ -675,10 +1274,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Text(
                 badge,
-                style: TextStyle(color: iconColor, fontSize: 11, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: iconColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             )
-          : const Icon(Icons.chevron_right_rounded, color: Colors.white24, size: 20),
+          : const Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white24,
+              size: 20,
+            ),
     );
   }
 
@@ -687,12 +1294,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Text(
           count,
-          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.8),
+          style: const TextStyle(
+            color: Colors.white54,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
+          ),
         ),
       ],
     );
@@ -715,21 +1331,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Text(
               'Uploaded Videos (${videos.length})',
-              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
-                ).then((_) => _loadProfileData());
+                Navigator.of(context)
+                    .push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ReelUploadScreen(),
+                      ),
+                    )
+                    .then((_) => _loadProfileData());
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryPink,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
-              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-              label: const Text('Upload Reel', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              icon: const Icon(
+                Icons.add_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+              label: const Text(
+                'Upload Reel',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         ),
@@ -745,11 +1385,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: Column(
               children: [
-                const Icon(Icons.video_library_outlined, size: 48, color: Colors.white24),
+                const Icon(
+                  Icons.video_library_outlined,
+                  size: 48,
+                  color: Colors.white24,
+                ),
                 const SizedBox(height: 12),
                 const Text(
                   'No Videos Uploaded Yet',
-                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 const Text(
@@ -760,15 +1408,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
-                    ).then((_) => _loadProfileData());
+                    Navigator.of(context)
+                        .push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ReelUploadScreen(),
+                          ),
+                        )
+                        .then((_) => _loadProfileData());
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryPink,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                  child: const Text('Upload Your First Video 🚀', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Upload Your First Video 🚀',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -779,15 +1439,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildUploadedVideoCard(Map<String, dynamic> video, List<Map<String, dynamic>> allVideos) {
+  Widget _buildUploadedVideoCard(
+    Map<String, dynamic> video,
+    List<Map<String, dynamic>> allVideos,
+  ) {
     final statusStr = video['status']?.toString() ?? 'Approved';
     final bool isApproved = statusStr.toLowerCase() == 'approved';
     final titleStr = video['title']?.toString() ?? 'Untitled Reel';
     final subjectStr = video['subject']?.toString().isNotEmpty == true
         ? video['subject'].toString()
         : (video['category']?.toString() ?? 'Reel');
-    final viewsCount = int.tryParse(video['view_count']?.toString() ?? video['views']?.toString() ?? '') ?? 0;
-    final likesCount = int.tryParse(video['likes_count']?.toString() ?? video['likes']?.toString() ?? '') ?? 0;
+    final viewsCount =
+        int.tryParse(
+          video['view_count']?.toString() ?? video['views']?.toString() ?? '',
+        ) ??
+        0;
+    final likesCount =
+        int.tryParse(
+          video['likes_count']?.toString() ?? video['likes']?.toString() ?? '',
+        ) ??
+        0;
     final createdStr = video['created_at']?.toString() ?? '';
     final thumbUrl = _getThumbnailUrl(video);
 
@@ -795,7 +1466,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (createdStr.isNotEmpty) {
       try {
         final d = DateTime.parse(createdStr).toLocal();
-        dateLabel = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+        dateLabel =
+            '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
       } catch (_) {
         dateLabel = createdStr.substring(0, 10.clamp(0, createdStr.length));
       }
@@ -854,21 +1526,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Expanded(
                         child: Text(
                           titleStr,
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
-                          color: isApproved ? const Color(0xFF00E676).withOpacity(0.15) : const Color(0xFFFF9100).withOpacity(0.15),
+                          color: isApproved
+                              ? const Color(0xFF00E676).withOpacity(0.15)
+                              : const Color(0xFFFF9100).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           statusStr,
                           style: TextStyle(
-                            color: isApproved ? const Color(0xFF00E676) : const Color(0xFFFF9100),
+                            color: isApproved
+                                ? const Color(0xFF00E676)
+                                : const Color(0xFFFF9100),
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -879,23 +1562,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 4),
                   Text(
                     subjectStr,
-                    style: const TextStyle(color: Color(0xFFFF6584), fontSize: 11, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      color: Color(0xFFFF6584),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.remove_red_eye_rounded, size: 12, color: Colors.white38),
+                      const Icon(
+                        Icons.remove_red_eye_rounded,
+                        size: 12,
+                        color: Colors.white38,
+                      ),
                       const SizedBox(width: 4),
-                      Text(_formatCount(viewsCount), style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                      Text(
+                        _formatCount(viewsCount),
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 11,
+                        ),
+                      ),
                       const SizedBox(width: 14),
-                      const Icon(Icons.favorite_rounded, size: 12, color: Colors.white38),
+                      const Icon(
+                        Icons.favorite_rounded,
+                        size: 12,
+                        color: Colors.white38,
+                      ),
                       const SizedBox(width: 4),
-                      Text(_formatCount(likesCount), style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                      Text(
+                        _formatCount(likesCount),
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 11,
+                        ),
+                      ),
                       if (dateLabel.isNotEmpty) ...[
                         const Spacer(),
                         Text(
                           dateLabel,
-                          style: const TextStyle(color: Colors.white38, fontSize: 10),
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 10,
+                          ),
                         ),
                       ],
                     ],
@@ -919,31 +1629,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
       child: const Center(
-        child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 28),
+        child: Icon(
+          Icons.play_circle_fill_rounded,
+          color: Colors.white,
+          size: 28,
+        ),
       ),
     );
   }
 
   /// 🎬 Reels Grid with Real Video Thumbnails & Full-Screen Player on Tap
-  Widget _buildReelsGrid(List<Map<String, dynamic>> items, {bool isLikedTab = false}) {
+  Widget _buildReelsGrid(
+    List<Map<String, dynamic>> items, {
+    bool isLikedTab = false,
+  }) {
     if (items.isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                isLikedTab ? Icons.favorite_border_rounded : Icons.grid_on_rounded,
-                size: 52,
+                isLikedTab
+                    ? Icons.favorite_border_rounded
+                    : Icons.grid_on_rounded,
+                size: 44,
                 color: Colors.white24,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 isLikedTab ? 'No Liked Videos' : 'No Reels Uploaded',
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 isLikedTab
                     ? 'Double-tap any reel to like and see it here!'
@@ -969,8 +1694,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       itemBuilder: (context, index) {
         final video = items[index];
         final gradient = _gridGradients[index % _gridGradients.length];
-        final viewsCount = int.tryParse(video['view_count']?.toString() ?? video['views']?.toString() ?? '') ?? 0;
-        final likesCount = int.tryParse(video['likes_count']?.toString() ?? video['likes']?.toString() ?? '') ?? 0;
+        final viewsCount =
+            int.tryParse(
+              video['view_count']?.toString() ??
+                  video['views']?.toString() ??
+                  '',
+            ) ??
+            0;
+        final likesCount =
+            int.tryParse(
+              video['likes_count']?.toString() ??
+                  video['likes']?.toString() ??
+                  '',
+            ) ??
+            0;
         final thumbUrl = _getThumbnailUrl(video);
 
         return ClipRRect(
@@ -995,7 +1732,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Image.network(
                     thumbUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildFallbackGradient(gradient),
+                    errorBuilder: (_, __, ___) =>
+                        _buildFallbackGradient(gradient),
                   )
                 else
                   _buildFallbackGradient(gradient),
@@ -1024,7 +1762,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       shape: BoxShape.circle,
                       color: Colors.black.withOpacity(0.4),
                     ),
-                    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                 ),
 
@@ -1053,18 +1795,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   right: 8,
                   child: Row(
                     children: [
-                      const Icon(Icons.remove_red_eye_rounded, size: 11, color: Colors.white70),
+                      const Icon(
+                        Icons.remove_red_eye_rounded,
+                        size: 11,
+                        color: Colors.white70,
+                      ),
                       const SizedBox(width: 3),
                       Text(
                         _formatCount(viewsCount),
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const Spacer(),
-                      const Icon(Icons.favorite_rounded, size: 11, color: Colors.white70),
+                      const Icon(
+                        Icons.favorite_rounded,
+                        size: 11,
+                        color: Colors.white70,
+                      ),
                       const SizedBox(width: 3),
                       Text(
                         _formatCount(likesCount),
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),

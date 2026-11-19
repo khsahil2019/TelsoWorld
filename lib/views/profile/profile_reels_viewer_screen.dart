@@ -159,17 +159,43 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
     _initVideoPlayer();
   }
 
+  bool get _isPhoto {
+    final rawType = widget.video['media_type']?.toString().toLowerCase().trim() ?? '';
+    final urlStr = _resolveVideoUrl().toLowerCase();
+    final photoStr = (widget.video['photo_url'] ?? widget.video['image'] ?? '').toString().toLowerCase();
+    return rawType == 'photo' ||
+        urlStr.endsWith('.jpg') ||
+        urlStr.endsWith('.png') ||
+        urlStr.endsWith('.jpeg') ||
+        urlStr.endsWith('.webp') ||
+        photoStr.endsWith('.jpg') ||
+        photoStr.endsWith('.png') ||
+        photoStr.endsWith('.jpeg') ||
+        photoStr.endsWith('.webp');
+  }
+
+  String _resolvePhotoUrl() {
+    final rawPhoto = (widget.video['photo_url'] ?? widget.video['image'] ?? widget.video['thumbnail_url'] ?? '').toString().trim();
+    if (rawPhoto.isNotEmpty) return ApiEndpoints.mediaUrl(rawPhoto);
+    return _resolveVideoUrl();
+  }
+
   String _resolveVideoUrl() {
     final raw = widget.video['video_url'] ?? widget.video['video_path'] ?? widget.video['url'] ?? '';
     final str = raw.toString().trim();
     if (str.isEmpty) return '';
-    if (str.startsWith('http://') || str.startsWith('https://')) {
-      return str;
-    }
-    return '${ApiEndpoints.baseUrl}${str.startsWith('/') ? str : '/$str'}';
+    return ApiEndpoints.mediaUrl(str);
   }
 
   Future<void> _initVideoPlayer() async {
+    if (_isPhoto) {
+      if (mounted) {
+        setState(() => _initialized = true);
+        if (widget.isActive) _recordView();
+      }
+      return;
+    }
+
     final urlStr = _resolveVideoUrl();
     if (urlStr.isEmpty) {
       if (mounted) setState(() => _hasError = true);
@@ -178,9 +204,13 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
 
     try {
       final uri = Uri.parse(urlStr);
-      _controller = VideoPlayerController.networkUrl(uri);
+      _controller = VideoPlayerController.networkUrl(
+        uri,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
       await _controller!.initialize();
       _controller!.setLooping(true);
+      _controller!.setVolume(1.0);
 
       if (mounted) {
         setState(() {
@@ -200,6 +230,13 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
   @override
   void didUpdateWidget(covariant _ProfileReelPageItem oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_isPhoto) {
+      if (widget.isActive && !oldWidget.isActive) {
+        _recordView();
+      }
+      return;
+    }
+
     if (_controller == null || !_initialized) return;
 
     if (widget.isActive && !oldWidget.isActive) {
@@ -346,6 +383,19 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
     Share.share('Check out "$title" on Telso World! 🎵\n$url');
   }
 
+  void _openComments() {
+    final vId = widget.video['id'] is int
+        ? widget.video['id'] as int
+        : int.tryParse(widget.video['id']?.toString() ?? '') ?? 0;
+    if (vId <= 0) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProfileCommentsSheet(videoId: vId),
+    );
+  }
+
   String _formatCount(int number) {
     if (number >= 1000000) return '${(number / 1000000).toStringAsFixed(1)}M';
     if (number >= 1000) return '${(number / 1000).toStringAsFixed(1)}K';
@@ -366,8 +416,35 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 🎥 Video Player or Loading / Error
-          if (_initialized && _controller != null)
+          // 🎥 Media View: Photo or Video Player
+          if (_isPhoto)
+            Center(
+              child: Image.network(
+                _resolvePhotoUrl(),
+                fit: BoxFit.contain,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (_, __, ___) => Container(
+                  color: const Color(0xFF141418),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.broken_image_rounded, color: Colors.white38, size: 48),
+                        SizedBox(height: 10),
+                        Text('Photo unavailable', style: TextStyle(color: Colors.white60, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ),
+                loadingBuilder: (_, child, prog) => prog == null
+                    ? child
+                    : const Center(
+                        child: CircularProgressIndicator(color: AppColors.primaryPink, strokeWidth: 2.5),
+                      ),
+              ),
+            )
+          else if (_initialized && _controller != null)
             Center(
               child: AspectRatio(
                 aspectRatio: _controller!.value.aspectRatio > 0 ? _controller!.value.aspectRatio : 9 / 16,
@@ -536,7 +613,31 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
                 ),
                 const SizedBox(height: 16),
 
-                // 2. Share Button
+                // 2. Comment Button
+                InkWell(
+                  onTap: _openComments,
+                  borderRadius: BorderRadius.circular(24),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                    child: Column(
+                      children: const [
+                        Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 28),
+                        SizedBox(height: 4),
+                        Text(
+                          'Comment',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 3. Share Button (Authentic Paper Plane)
                 InkWell(
                   onTap: _shareReel,
                   borderRadius: BorderRadius.circular(24),
@@ -544,7 +645,7 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
                     padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                     child: Column(
                       children: const [
-                        Icon(Icons.share_rounded, color: Colors.white, size: 28),
+                        Icon(Icons.near_me_outlined, color: Colors.white, size: 28),
                         SizedBox(height: 4),
                         Text(
                           'Share',
@@ -560,7 +661,7 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
                 ),
                 const SizedBox(height: 20),
 
-                // 3. Audio Disc
+                // 4. Audio Disc
                 Container(
                   width: 38,
                   height: 38,
@@ -684,6 +785,243 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
                       ),
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileCommentsSheet extends StatefulWidget {
+  final int videoId;
+  const _ProfileCommentsSheet({required this.videoId});
+
+  @override
+  State<_ProfileCommentsSheet> createState() => _ProfileCommentsSheetState();
+}
+
+class _ProfileCommentsSheetState extends State<_ProfileCommentsSheet> {
+  final TextEditingController _commentCtrl = TextEditingController();
+  bool _isLoading = true;
+  bool _isSending = false;
+  List<dynamic> _comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchComments();
+  }
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchComments() async {
+    try {
+      final token = await SessionTokenStore.getToken();
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/comments?video_id=${widget.videoId}');
+      final res = await http.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (mounted && data is Map && data['data'] is List) {
+          setState(() {
+            _comments = data['data'] as List<dynamic>;
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _sendComment() async {
+    final text = _commentCtrl.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    setState(() => _isSending = true);
+    try {
+      final token = await SessionTokenStore.getToken();
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/comments/add');
+      final res = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'video_id': widget.videoId,
+          'comment': text,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        _commentCtrl.clear();
+        _fetchComments();
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isSending = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.65,
+      decoration: const BoxDecoration(
+        color: Color(0xFF161622),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Comments',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          const Divider(color: Colors.white12, height: 1),
+          // Comments list
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryPink,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : _comments.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No comments yet. Be the first to comment!',
+                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _comments.length,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        itemBuilder: (context, index) {
+                          final c = _comments[index];
+                          final user = c['user']?.toString() ?? 'User';
+                          final text = c['comment']?.toString() ?? '';
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: const Color(0xFF2A2A38),
+                                  child: Text(
+                                    user.isNotEmpty ? user[0].toUpperCase() : 'U',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        user,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        text,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+          ),
+          // Input bar
+          Container(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 8,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+            ),
+            decoration: const BoxDecoration(
+              color: Color(0xFF101018),
+              border: Border(top: BorderSide(color: Colors.white10)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentCtrl,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Add a comment...',
+                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                      filled: true,
+                      fillColor: const Color(0xFF1E1E2C),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: _isSending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.primaryPink,
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded, color: AppColors.primaryPink),
+                  onPressed: _sendComment,
                 ),
               ],
             ),

@@ -248,6 +248,56 @@ router.put('/videos/:id', adminRequired, async (req, res) => {
 });
 
 /**
+ * 🔄 PUT /api/admin/videos/:id/status
+ */
+router.put('/videos/:id/status', adminRequired, async (req, res) => {
+  const { status } = req.body;
+  if (!status) {
+    return res.status(422).json({ status: false, message: 'status is required' });
+  }
+  const updated = await db.updateVideo(req.params.id, { status });
+  if (!updated) {
+    return res.status(404).json({ status: false, message: 'Video not found' });
+  }
+  return res.status(200).json({ status: true, message: `Video marked as ${status}`, data: updated });
+});
+
+/**
+ * 🔄 POST /api/admin/videos/bulk-status
+ */
+router.post('/videos/bulk-status', adminRequired, async (req, res) => {
+  const { status, category, video_type, media_type, ids } = req.body;
+  if (!status) {
+    return res.status(422).json({ status: false, message: 'status is required' });
+  }
+  let query = 'UPDATE videos SET status = $1 WHERE 1=1';
+  const params = [status];
+  let pIdx = 2;
+  if (Array.isArray(ids) && ids.length > 0) {
+    query += ` AND id = ANY($${pIdx++}::int[])`;
+    params.push(ids);
+  }
+  if (video_type) {
+    query += ` AND video_type = $${pIdx++}`;
+    params.push(video_type);
+  }
+  if (media_type) {
+    query += ` AND media_type = $${pIdx++}`;
+    params.push(media_type);
+  }
+  if (category) {
+    query += ` AND category = $${pIdx++}`;
+    params.push(category);
+  }
+  const result = await db.pool.query(query, params);
+  return res.status(200).json({
+    status: true,
+    message: `Updated ${result.rowCount} items to ${status}`,
+    updated_count: result.rowCount,
+  });
+});
+
+/**
  * 🗑️ DELETE /api/admin/videos/:id
  */
 router.delete('/videos/:id', adminRequired, async (req, res) => {

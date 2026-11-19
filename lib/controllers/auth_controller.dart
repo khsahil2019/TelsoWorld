@@ -65,6 +65,9 @@ class AuthController extends GetxController {
             if (currentUser.value?.username.isNotEmpty == true) {
               await _storageService.setUsername(currentUser.value!.username);
             }
+            if (currentUser.value?.profileImage?.isNotEmpty == true) {
+              await _storageService.setProfileImage(currentUser.value!.profileImage!);
+            }
           }
           // Main app dashboard par jao (Back stack clear karke)
           Get.offAllNamed(AppRoutes.main);

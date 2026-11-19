@@ -5,11 +5,11 @@ const { authOptional } = require('../middleware/auth');
 const router = express.Router();
 
 /**
- * 💬 GET /api/comments
- * Accepts query param `video_id`
+ * 💬 GET /api/comments or POST /api/comments (when requesting list)
+ * Accepts query param or body `video_id`
  */
-router.get('/', authOptional, async (req, res) => {
-  const videoId = req.query.video_id || req.query.videoId;
+const handleGetComments = async (req, res) => {
+  const videoId = req.query.video_id || req.body.video_id || req.query.videoId;
   if (!videoId) {
     return res.status(422).json({ status: false, message: 'video_id is required' });
   }
@@ -21,8 +21,16 @@ router.get('/', authOptional, async (req, res) => {
     status: true,
     data: comments,
     comments,
+    pagination: {
+      current_page: 1,
+      last_page: 1,
+      total: comments.length,
+    },
   });
-});
+};
+
+router.get('/', authOptional, handleGetComments);
+router.post('/list', authOptional, handleGetComments);
 
 /**
  * ✍️ POST /api/comments/add and POST /api/comments
@@ -59,7 +67,40 @@ const handleAddComment = async (req, res) => {
 };
 
 router.post('/add', authOptional, handleAddComment);
-router.post('/', authOptional, handleAddComment);
+router.post('/', authOptional, (req, res) => {
+  if (req.body.comment || req.body.content) {
+    return handleAddComment(req, res);
+  }
+  return handleGetComments(req, res);
+});
+
+/**
+ * ✏️ PUT /api/comments/:id or POST /api/comments/edit
+ * Edit comment text
+ */
+const handleEditComment = async (req, res) => {
+  const commentId = req.params.id || req.body.comment_id || req.body.id;
+  const text = (req.body.comment || req.body.content || '').trim();
+  const userId = req.user ? req.user.id : (req.body.user_id || 1);
+
+  if (!commentId || !text) {
+    return res.status(422).json({ status: false, message: 'comment_id and comment text are required' });
+  }
+
+  const updated = await db.updateComment(commentId, userId, text);
+  if (!updated) {
+    return res.status(404).json({ status: false, message: 'Comment not found or permission denied' });
+  }
+
+  return res.status(200).json({
+    status: true,
+    message: 'Comment updated successfully! ✏️',
+    data: updated,
+  });
+};
+
+router.put('/:id', authOptional, handleEditComment);
+router.post('/edit', authOptional, handleEditComment);
 
 /**
  * ❤️ POST /api/comments/like

@@ -667,7 +667,7 @@ class PostgresDatabase {
   async updateUser(id, updates) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) return null;
-    const allowed = ['name', 'bio', 'email', 'whatsapp', 'status', 'profile_image', 'state', 'district', 'password'];
+    const allowed = ['name', 'username', 'mobile_no', 'bio', 'email', 'whatsapp', 'status', 'profile_image', 'state', 'district', 'password'];
     const sets = [];
     const vals = [];
     let idx = 1;
@@ -906,7 +906,7 @@ class PostgresDatabase {
 
       if (idx === -1) {
         likedBy.push(uId);
-        likesCount = Math.max(likesCount + 1, likedBy.length);
+        likesCount = likedBy.length;
         liked = true;
         if (video.user_id && video.user_id !== uId) notifyOwner = true;
 
@@ -1163,6 +1163,25 @@ class PostgresDatabase {
       throw err;
     } finally {
       client.release();
+    }
+  }
+
+  async updateComment(commentId, userId, newText) {
+    const cId = parseInt(commentId, 10);
+    const uId = parseInt(userId, 10);
+    if (!cId || !newText) return null;
+    try {
+      const { rows } = await this.pool.query(
+        `UPDATE comments
+         SET comment = $1
+         WHERE id = $2 AND (user_id = $3 OR $3 = 1)
+         RETURNING *`,
+        [newText.trim(), cId, uId]
+      );
+      return rows[0] ? mapComment(rows[0]) : null;
+    } catch (e) {
+      console.error('updateComment error:', e);
+      return null;
     }
   }
 
@@ -1453,7 +1472,97 @@ class PostgresDatabase {
         'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
         [followerId, followingId]
       );
+      try {
+        const follower = await this.findUserById(followerId);
+        await this.addUserNotification(followingId, {
+          title: '👤 New Follower!',
+          message: `${follower ? (follower.name || follower.username) : 'Someone'} started following you.`,
+          type: 'social',
+          avatar: follower ? follower.profile_image : '',
+          action_url: `#profile?u=${followerId}`,
+          action_text: 'View Profile',
+        });
+      } catch (_) {}
       return { following: true };
+    }
+  }
+
+  async getFollowers(userId) {
+    try {
+      const { rows } = await this.pool.query(
+        `SELECT u.id, u.name, u.username, u.profile_image, u.bio, f.created_at
+         FROM follows f
+         JOIN users u ON f.follower_id = u.id
+         WHERE f.following_id = $1
+         ORDER BY f.created_at DESC`,
+        [userId]
+      );
+      return rows;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async getFollowing(userId) {
+    try {
+      const { rows } = await this.pool.query(
+        `SELECT u.id, u.name, u.username, u.profile_image, u.bio, f.created_at
+         FROM follows f
+         JOIN users u ON f.following_id = u.id
+         WHERE f.follower_id = $1
+         ORDER BY f.created_at DESC`,
+        [userId]
+      );
+      return rows;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async createHighlight({ userId, title, coverUrl = '', items = [] }) {
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS highlights (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          cover_url TEXT DEFAULT '',
+          items JSONB NOT NULL DEFAULT '[]'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      const { rows } = await this.pool.query(
+        `INSERT INTO highlights (user_id, title, cover_url, items)
+         VALUES ($1, $2, $3, $4::jsonb)
+         RETURNING *`,
+        [userId, title, coverUrl, JSON.stringify(items)]
+      );
+      return rows[0];
+    } catch (e) {
+      console.error('createHighlight error:', e);
+      return null;
+    }
+  }
+
+  async getHighlights(userId) {
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS highlights (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          cover_url TEXT DEFAULT '',
+          items JSONB NOT NULL DEFAULT '[]'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      const { rows } = await this.pool.query(
+        `SELECT * FROM highlights WHERE user_id = $1 ORDER BY id DESC`,
+        [userId]
+      );
+      return rows;
+    } catch (_) {
+      return [];
     }
   }
 

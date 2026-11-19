@@ -242,8 +242,13 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
                             shape: BoxShape.circle,
                             color: Color(0xFF0F0F16),
                           ),
-                          child: const Center(
-                            child: Icon(Icons.play_arrow_rounded, size: 48, color: Colors.white),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/icons/app_icon.png',
+                              width: 78,
+                              height: 78,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                       ),

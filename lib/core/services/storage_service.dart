@@ -17,12 +17,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 class StorageService extends GetxService {
   SharedPreferences? _prefs;
   String _memoryToken = '';
+  final RxString profileImage = ''.obs;
 
   /// 🚀 Service initialization: SharedPreferences instance load karke token cache karta hai
   Future<StorageService> init() async {
     try {
       _prefs = await SharedPreferences.getInstance();
       _memoryToken = _prefs?.getString('token')?.trim() ?? '';
+      profileImage.value = _prefs?.getString('profile_image')?.trim() ?? '';
     } catch (_) {}
     return this;
   }
@@ -51,6 +53,7 @@ class StorageService extends GetxService {
   /// 🚪 Logout ke time token delete karke session clear karta hai
   Future<bool> clearToken() async {
     _memoryToken = '';
+    profileImage.value = '';
     if (_prefs == null) {
       try {
         _prefs = await SharedPreferences.getInstance();
@@ -59,6 +62,7 @@ class StorageService extends GetxService {
     if (_prefs != null) {
       await _prefs!.remove('user_id');
       await _prefs!.remove('username');
+      await _prefs!.remove('profile_image');
       return await _prefs!.remove('token');
     }
     return true;
@@ -90,6 +94,23 @@ class StorageService extends GetxService {
       } catch (_) {}
     }
     return await _prefs?.setString('username', username.trim()) ?? false;
+  }
+
+  /// 📸 Profile Image
+  String getProfileImage() {
+    if (profileImage.value.isNotEmpty) return profileImage.value;
+    return _prefs?.getString('profile_image')?.trim() ?? '';
+  }
+
+  Future<bool> setProfileImage(String url) async {
+    final clean = url.trim();
+    profileImage.value = clean;
+    if (_prefs == null) {
+      try {
+        _prefs = await SharedPreferences.getInstance();
+      } catch (_) {}
+    }
+    return await _prefs?.setString('profile_image', clean) ?? false;
   }
 
   /// ✅ Check karta hai ki token available hai ya nahi (User logged in hai ya nahi)

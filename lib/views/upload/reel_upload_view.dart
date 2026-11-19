@@ -1,31 +1,39 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:ffmpeg_kit_flutter_new_min_gpl/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_min_gpl/return_code.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
 import 'package:telsoworld/controllers/main_nav_controller.dart';
 import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
-import 'package:video_editor/video_editor.dart';
 import 'package:video_player/video_player.dart';
-import 'package:video_trimmer/video_trimmer.dart';
 
 const _kUploadPink = Color(0xFFD70F64);
-const _kDefaultMaxReelDuration = Duration(seconds: 60);
-const _kAvailableReelLimits = [
-  Duration(seconds: 30),
-  Duration(seconds: 60),
-];
 
+/// ---------------------------------------------------------------------------
+/// 📸 ReelUploadScreen (Instagram-Style Step-by-Step Creator Studio)
+/// ---------------------------------------------------------------------------
+/// Modes:
+/// - POST       (Photo post with optional audio)
+/// - STORY      (24-Hour disappearing Story)
+/// - REEL       (Short video reel)
+/// - AD / PROMO (Sponsored promotion with Budget & Target Web Link)
+///
+/// Flow:
+/// - Step 1: Media Select & Preview (Auto-opens gallery on launch)
+/// - Step 2: Add Details (Caption, Audio title, Ad settings & Share)
+/// ---------------------------------------------------------------------------
 class ReelUploadScreen extends StatefulWidget {
-  const ReelUploadScreen({super.key});
+  final String initialMode; // 'reel' | 'post' | 'story' | 'ad'
+
+  const ReelUploadScreen({
+    super.key,
+    this.initialMode = 'reel',
+  });
 
   @override
   State<ReelUploadScreen> createState() => _ReelUploadScreenState();
@@ -33,1829 +41,723 @@ class ReelUploadScreen extends StatefulWidget {
 
 class _ReelUploadScreenState extends State<ReelUploadScreen> {
   final ImagePicker _picker = ImagePicker();
-  final Trimmer _trimmer = Trimmer();
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _subjectController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
+
+  // Mode: 'reel', 'post', 'story', 'ad'
+  late String _activeMode;
+
+  // Step: 1 = Media Preview & Trim, 2 = Caption, Details & Share
+  int _currentStep = 1;
+
+  File? _selectedFile;
+  VideoPlayerController? _videoController;
+  bool _isVideo = false;
+  bool _isPlaying = false;
+  bool _isUploading = false;
+  bool _autoPickerLaunched = false;
+
+  final TextEditingController _captionController = TextEditingController();
+  final TextEditingController _audioTitleController = TextEditingController();
   final TextEditingController _targetUrlController = TextEditingController();
   final TextEditingController _budgetController = TextEditingController();
 
-  // Video Type: 'normal' (Simple Reel) vs 'ads' (Promotion / Sponsored Reel)
-  String _videoType = 'normal';
+  final List<String> _modes = ['POST', 'STORY', 'REEL', 'AD'];
 
-  File? _selectedVideoFile;
-  Duration? _videoDuration;
-  double _trimStart = 0;
-  double _trimEnd = 0;
-  bool _isVideoLoading = false;
-  bool _isPlaying = false;
-  bool _isTrimming = false;
-  bool _isUploading = false;
-  bool _isEditing = false;
-  String? _selectedSourceLabel;
-  Duration _maxReelDuration = _kDefaultMaxReelDuration;
-  int _lastHapticSecond = -1;
+  @override
+  void initState() {
+    super.initState();
+    final modeNormalized = widget.initialMode.toLowerCase().trim();
+    if (modeNormalized == 'photo' || modeNormalized == 'post') {
+      _activeMode = 'POST';
+    } else if (modeNormalized == 'story') {
+      _activeMode = 'STORY';
+    } else if (modeNormalized == 'ad' || modeNormalized == 'ads') {
+      _activeMode = 'AD';
+    } else {
+      _activeMode = 'REEL';
+    }
+
+    // Auto-launch gallery picker on opening if no media selected
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_autoPickerLaunched && _selectedFile == null) {
+        _autoPickerLaunched = true;
+        _pickMediaFromGallery();
+      }
+    });
+  }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _subjectController.dispose();
-    _nameController.dispose();
+    _videoController?.dispose();
+    _captionController.dispose();
+    _audioTitleController.dispose();
     _targetUrlController.dispose();
     _budgetController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickVideo(ImageSource source) async {
+  void _onModeChanged(String newMode) {
+    if (_selectedFile != null) {
+      if (_isVideo && newMode == 'POST') {
+        Get.snackbar(
+          'Video Selected',
+          'POST is disabled for videos. Choose REEL, STORY, or AD.',
+          backgroundColor: const Color(0xFF1E1E24),
+          colorText: const Color(0xFFFF9100),
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 2),
+        );
+        return;
+      }
+      if (!_isVideo && (newMode == 'REEL' || newMode == 'AD')) {
+        Get.snackbar(
+          'Photo Selected',
+          '$newMode is disabled for photos. Choose POST or STORY.',
+          backgroundColor: const Color(0xFF1E1E24),
+          colorText: const Color(0xFFFF9100),
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 2),
+        );
+        return;
+      }
+    }
+
+    if (_activeMode == newMode) return;
+    setState(() {
+      _activeMode = newMode;
+    });
+  }
+
+  /// 📥 Pick Media with resilient ImagePicker + FilePicker fallback
+  Future<void> _pickMediaFromGallery() async {
+    final bool wantsVideo = (_activeMode == 'REEL' || _activeMode == 'AD');
+
+    File? chosen;
+
     try {
-      final pickedVideo = await _picker.pickVideo(
-        source: source,
-        maxDuration: const Duration(minutes: 10),
-      );
-      if (pickedVideo == null) {
-        return;
+      if (wantsVideo) {
+        final x = await _picker.pickVideo(source: ImageSource.gallery);
+        if (x != null) chosen = File(x.path);
+      } else {
+        final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
+        if (x != null) chosen = File(x.path);
       }
+    } catch (_) {
+      // Fallback silently without throwing unhandled platform exception
+    }
 
-      final originalFile = File(pickedVideo.path);
-      final editedFile = await _openVideoEditor(originalFile);
-      if (editedFile == null) {
-        return;
-      }
+    if (chosen == null) {
+      try {
+        final res = await FilePicker.platform.pickFiles(
+          type: wantsVideo ? FileType.video : FileType.image,
+          allowMultiple: false,
+        );
+        if (res != null && res.files.isNotEmpty && res.files.single.path != null) {
+          chosen = File(res.files.single.path!);
+        }
+      } catch (_) {}
+    }
 
-      await _loadVideo(editedFile, source: source);
-    } catch (error) {
-      _showSnackBar('Unable to open video picker.\n$error');
+    if (chosen != null) {
+      await _loadSelectedFile(chosen);
     }
   }
 
-  Future<File?> _openVideoEditor(File sourceFile) async {
-    if (!mounted) {
-      return null;
-    }
-
-    setState(() {
-      _isEditing = true;
-    });
+  /// 📸 Capture from Camera
+  Future<void> _pickMediaFromCamera() async {
+    final bool wantsVideo = (_activeMode == 'REEL' || _activeMode == 'AD');
+    File? chosen;
 
     try {
-      final result = await Navigator.of(context).push<File>(
-        MaterialPageRoute<File>(
-          builder: (_) => _ReelVideoEditorScreen(
-            sourceFile: sourceFile,
-            maxDuration: _maxReelDuration,
-          ),
-        ),
-      );
-
-      if (result == null) {
-        return null;
+      if (wantsVideo) {
+        final x = await _picker.pickVideo(source: ImageSource.camera);
+        if (x != null) chosen = File(x.path);
+      } else {
+        final x = await _picker.pickImage(source: ImageSource.camera, imageQuality: 92);
+        if (x != null) chosen = File(x.path);
       }
+    } catch (_) {}
 
-      if (!await result.exists()) {
-        _showSnackBar('Edited reel file was not found.');
-        return null;
-      }
-
-      return result;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isEditing = false;
-        });
-      }
+    if (chosen != null) {
+      await _loadSelectedFile(chosen);
     }
   }
 
-  Future<void> _loadVideo(File file, {required ImageSource source}) async {
-    setState(() {
-      _isVideoLoading = true;
-      _selectedVideoFile = null;
-      _videoDuration = null;
-      _trimStart = 0;
-      _trimEnd = 0;
-      _isPlaying = false;
-    });
+  Future<void> _loadSelectedFile(File file) async {
+    _videoController?.dispose();
+    _videoController = null;
 
-    try {
-      final controller = VideoPlayerController.file(file);
-      await controller.initialize();
-      final duration = controller.value.duration;
-      await controller.dispose();
+    final ext = path.extension(file.path).toLowerCase();
+    final isVid = ext.contains('mp4') ||
+        ext.contains('mov') ||
+        ext.contains('mkv') ||
+        ext.contains('webm') ||
+        ext.contains('avi') ||
+        ext.contains('3gp');
 
-      if (duration == Duration.zero) {
-        throw Exception('The selected video has no playable duration.');
-      }
-
-      await _trimmer.loadVideo(videoFile: file);
-
-      if (!mounted) {
-        return;
-      }
-
-      final trimmedEndInSeconds = math.min(
-        duration.inMilliseconds / 1000,
-        _maxReelDuration.inSeconds.toDouble(),
-      );
+    if (isVid) {
+      final ctrl = VideoPlayerController.file(file);
+      await ctrl.initialize();
+      await ctrl.setLooping(true);
+      ctrl.play();
 
       setState(() {
-        _selectedVideoFile = file;
-        _videoDuration = duration;
-        _trimStart = 0;
-        _trimEnd = trimmedEndInSeconds;
-        _selectedSourceLabel = source == ImageSource.camera
-            ? 'Camera'
-            : 'Gallery';
+        _selectedFile = file;
+        _isVideo = true;
+        _videoController = ctrl;
+        _isPlaying = true;
+        _currentStep = 1;
+        // Point 3: If video is selected, POST is disabled -> auto-switch to REEL
+        if (_activeMode == 'POST') {
+          _activeMode = 'REEL';
+        }
       });
-
-      if (duration > _maxReelDuration) {
-        _showSnackBar(
-          'This video is longer than ${_maxReelDuration.inSeconds} seconds. Trim it before posting.',
-        );
-      }
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar('Unable to load the selected video.\n$error');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isVideoLoading = false;
-        });
-      }
+    } else {
+      setState(() {
+        _selectedFile = file;
+        _isVideo = false;
+        _isPlaying = false;
+        _currentStep = 1;
+        // Point 3: If photo is selected, REEL & AD are disabled -> auto-switch to POST
+        if (_activeMode == 'REEL' || _activeMode == 'AD') {
+          _activeMode = 'POST';
+        }
+      });
     }
   }
 
-  Future<void> _openSourcePicker() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF141414),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Create reel',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Choose a source for your short video reel.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                const SizedBox(height: 20),
-                _SourceActionTile(
-                  icon: Icons.video_library_rounded,
-                  title: 'Upload from gallery',
-                  subtitle: 'Pick an existing video and trim it.',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _pickVideo(ImageSource.gallery);
-                  },
-                ),
-                const SizedBox(height: 12),
-                _SourceActionTile(
-                  icon: Icons.videocam_rounded,
-                  title: 'Record with camera',
-                  subtitle: 'Capture a reel and trim before posting.',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _pickVideo(ImageSource.camera);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  bool get _needsTrimmedExport {
-    if (_selectedVideoFile == null || _videoDuration == null) {
-      return false;
-    }
-
-    final totalSeconds = _videoDuration!.inMilliseconds / 1000;
-    return _trimStart > 0.05 ||
-        _trimEnd < totalSeconds - 0.05 ||
-        totalSeconds > _maxReelDuration.inSeconds;
-  }
-
-  Duration get _selectedDuration {
-    final seconds = (_trimEnd - _trimStart).clamp(
-      0,
-      _maxReelDuration.inSeconds.toDouble(),
-    );
-    return Duration(milliseconds: (seconds * 1000).round());
-  }
-
-  Duration get _trimStartDuration => Duration(
-        milliseconds: (_trimStart * 1000).round(),
-      );
-
-  Duration get _trimEndDuration => Duration(
-        milliseconds: (_trimEnd * 1000).round(),
-      );
-
-  Future<File?> _prepareUploadFile() async {
-    if (_selectedVideoFile == null) {
-      return null;
-    }
-
-    if (!_needsTrimmedExport) {
-      return _selectedVideoFile;
-    }
-
-    setState(() {
-      _isTrimming = true;
-      _isPlaying = false;
-    });
-
-    try {
-      String? outputPath;
-      await _trimmer.saveTrimmedVideo(
-        startValue: _trimStart,
-        endValue: _trimEnd,
-        videoFolderName: 'TelsoWorldReels',
-        videoFileName: 'reel_${DateTime.now().millisecondsSinceEpoch}',
-        onSave: (value) {
-          outputPath = value;
-        },
-      );
-
-      if (outputPath == null || outputPath!.isEmpty) {
-        throw Exception('Trim export did not produce a file.');
-      }
-
-      return File(outputPath!);
-    } catch (error) {
-      _showSnackBar('Unable to trim the reel.\n$error');
-      return null;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isTrimming = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _uploadReel() async {
-    if (_selectedVideoFile == null || _videoDuration == null) {
-      _showSnackBar('Select a video reel first.');
-      return;
-    }
-
-    if (_titleController.text.trim().isEmpty) {
-      _showSnackBar('Enter a reel title before uploading.');
-      return;
-    }
-
-    if (_subjectController.text.trim().isEmpty) {
-      _showSnackBar('Enter a reel subject / description before uploading.');
-      return;
-    }
-
-    if (_selectedDuration > _maxReelDuration) {
-      _showSnackBar(
-        'Reels must be ${_maxReelDuration.inSeconds} seconds or shorter.',
-      );
+  /// 🚀 Upload to backend based on active mode
+  Future<void> _shareContent() async {
+    if (_selectedFile == null) {
+      Get.snackbar('Select Media', 'Please select a video or photo to upload.',
+          backgroundColor: const Color(0xFF1E1E24), colorText: Colors.white);
       return;
     }
 
     final token = await SessionTokenStore.getToken();
-
     if (token.isEmpty) {
-      _showSnackBar('Login is required before uploading a reel.');
+      Get.snackbar('Login Required', 'Please log in to upload content.',
+          backgroundColor: const Color(0xFF1E1E24), colorText: Colors.white);
       return;
     }
 
-    setState(() {
-      _isUploading = true;
-      _isPlaying = false;
-    });
+    setState(() => _isUploading = true);
 
     try {
-      final uploadFile = await _prepareUploadFile();
-      if (uploadFile == null) {
-        return;
-      }
-
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${ApiEndpoints.baseUrl}/reporter/upload-video'),
-      );
-
-      request.headers.addAll({
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      });
-      request.fields['title'] = _titleController.text.trim();
-      request.fields['subject'] = _subjectController.text.trim();
-      request.fields['video_type'] = _videoType;
-      request.fields['target_url'] = _targetUrlController.text.trim();
-      request.fields['budget'] = _budgetController.text.trim();
-      request.fields['name'] = _nameController.text.trim().isNotEmpty
-          ? _nameController.text.trim()
-          : _titleController.text.trim();
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'video',
-          uploadFile.path,
-          filename: path.basename(uploadFile.path),
-        ),
-      );
-
-      final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 60),
-      );
-      final response = await http.Response.fromStream(streamedResponse);
-
-      Map<String, dynamic>? responseJson;
-      try {
-        responseJson = jsonDecode(response.body) as Map<String, dynamic>;
-      } catch (_) {
-        responseJson = null;
-      }
-
-      final message =
-          responseJson?['message']?.toString() ??
-          'Upload failed with status ${response.statusCode}.';
-
-      if (!mounted) {
-        return;
-      }
-
-      if (response.statusCode >= 200 &&
-          response.statusCode < 300 &&
-          (responseJson == null || responseJson['status'] != false)) {
-        Get.snackbar(
-          'Reel Uploaded! ⏳',
-          'Sent to Admin Approval Queue. Your video will appear on the feed once approved.',
-          backgroundColor: const Color(0xFF161622),
-          colorText: const Color(0xFF10B981),
-          snackPosition: SnackPosition.BOTTOM,
-          duration: const Duration(seconds: 4),
-          icon: const Icon(Icons.shield_outlined, color: Color(0xFF10B981)),
+      if (_activeMode == 'STORY') {
+        // ── Upload 24-hr Story ──
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse('${ApiEndpoints.baseUrl}/reporter/stories'),
         );
-        Navigator.of(context).pop(true);
-        return;
-      }
-
-      _showSnackBar(message);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar('Unable to upload reel.\n$error');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploading = false;
+        request.headers.addAll({
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
         });
-      }
-    }
-  }
-
-  Future<void> _togglePlayback() async {
-    if (_selectedVideoFile == null || _isVideoLoading || _isTrimming) {
-      return;
-    }
-
-    final playbackState = await _trimmer.videoPlaybackControl(
-      startValue: _trimStart,
-      endValue: _trimEnd,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isPlaying = playbackState;
-    });
-  }
-
-  void _clearSelectedVideo() {
-    setState(() {
-      _selectedVideoFile = null;
-      _videoDuration = null;
-      _trimStart = 0;
-      _trimEnd = 0;
-      _isPlaying = false;
-      _selectedSourceLabel = null;
-    });
-  }
-
-  void _updateMaxDuration(Duration duration) {
-    if (_maxReelDuration == duration) {
-      return;
-    }
-
-    setState(() {
-      _maxReelDuration = duration;
-
-      if (_videoDuration != null) {
-        final maxTrimEnd = math.min(
-          _videoDuration!.inMilliseconds / 1000,
-          _maxReelDuration.inSeconds.toDouble(),
+        request.fields['media_type'] = _isVideo ? 'video' : 'image';
+        request.fields['caption'] = _captionController.text.trim().isNotEmpty
+            ? _captionController.text.trim()
+            : 'Telso Story ✨';
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            _selectedFile!.path,
+            filename: path.basename(_selectedFile!.path),
+          ),
         );
 
-        _trimEnd = _trimEnd == 0 ? maxTrimEnd : _trimEnd.clamp(0, maxTrimEnd);
-        _trimStart = _trimStart.clamp(0, _trimEnd);
+        final res = await request.send().timeout(const Duration(seconds: 45));
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          Get.snackbar(
+            'Story Shared! 🌟',
+            'Your story is now live for 24 hours!',
+            backgroundColor: const Color(0xFF161622),
+            colorText: const Color(0xFF10B981),
+            snackPosition: SnackPosition.BOTTOM,
+          );
+          _finishAndNavigate();
+          return;
+        }
+      } else {
+        // ── Upload Reel, Post, or Ad ──
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse('${ApiEndpoints.baseUrl}/reporter/upload-video'),
+        );
+        request.headers.addAll({
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        });
+
+        final caption = _captionController.text.trim().isNotEmpty
+            ? _captionController.text.trim()
+            : (_activeMode == 'AD' ? 'Sponsored Promotion' : 'New Post');
+
+        request.fields['title'] = caption;
+        request.fields['subject'] = caption;
+        request.fields['name'] = caption;
+        request.fields['video_type'] = (_activeMode == 'AD') ? 'ads' : 'normal';
+        request.fields['media_type'] = (_activeMode == 'POST' && !_isVideo) ? 'photo' : 'video';
+
+        if (_audioTitleController.text.trim().isNotEmpty) {
+          request.fields['audio_title'] = _audioTitleController.text.trim();
+        }
+
+        if (_activeMode == 'AD') {
+          request.fields['target_url'] = _targetUrlController.text.trim();
+          request.fields['budget'] = _budgetController.text.trim().isNotEmpty
+              ? _budgetController.text.trim()
+              : '500';
+        }
+
+        final fieldName = _isVideo ? 'video' : 'photo';
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            fieldName,
+            _selectedFile!.path,
+            filename: path.basename(_selectedFile!.path),
+          ),
+        );
+
+        final streamed = await request.send().timeout(const Duration(seconds: 60));
+        final response = await http.Response.fromStream(streamed);
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          Get.snackbar(
+            'Shared Successfully! 🚀',
+            _activeMode == 'AD'
+                ? 'Your promotion reel was sent to the approval queue.'
+                : 'Your post is now uploaded to your profile & feed!',
+            backgroundColor: const Color(0xFF161622),
+            colorText: const Color(0xFF10B981),
+            snackPosition: SnackPosition.BOTTOM,
+            duration: const Duration(seconds: 4),
+          );
+          _finishAndNavigate();
+          return;
+        } else {
+          final errBody = jsonDecode(response.body);
+          Get.snackbar('Upload Failed', errBody['message'] ?? 'Please try again',
+              backgroundColor: const Color(0xFF1E1E24), colorText: Colors.redAccent);
+        }
       }
-
-      _isPlaying = false;
-    });
-
-    if (_videoDuration != null && _videoDuration! > _maxReelDuration) {
-      _showSnackBar(
-        'Trim limit changed to ${_maxReelDuration.inSeconds} seconds.',
-      );
+    } catch (e) {
+      Get.snackbar('Error', 'Unable to upload: $e',
+          backgroundColor: const Color(0xFF1E1E24), colorText: Colors.redAccent);
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  void _onTrimChanged({
-    required double start,
-    required double end,
-  }) {
-    final boundedEnd = math.min(
-      end,
-      _maxReelDuration.inSeconds.toDouble(),
-    ).toDouble();
-    final boundedStart = start.clamp(0, boundedEnd).toDouble();
-
-    setState(() {
-      _trimStart = boundedStart;
-      _trimEnd = boundedEnd;
-      _isPlaying = false;
-    });
-
-    final secondMarker = _selectedDuration.inSeconds;
-    if (secondMarker != _lastHapticSecond) {
-      _lastHapticSecond = secondMarker;
-      HapticFeedback.selectionClick();
+  void _finishAndNavigate() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+    } else {
+      try {
+        Get.find<MainNavController>().changeTab(0);
+      } catch (_) {}
     }
-  }
-
-  void _showSnackBar(String message) {
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: const Color(0xFF242424),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-  }
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
   }
 
   @override
   Widget build(BuildContext context) {
-    final canInteract =
-        !_isUploading && !_isTrimming && !_isVideoLoading && !_isEditing;
-    final hasSelectedVideo = _selectedVideoFile != null;
-    final canPost = canInteract && hasSelectedVideo;
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 10, 8, 0),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: _isUploading
-                        ? null
-                        : () {
-                            if (Navigator.of(context).canPop()) {
-                              Navigator.of(context).pop();
-                            } else {
-                              try {
-                                Get.find<MainNavController>().changeTab(0);
-                              } catch (_) {}
-                            }
-                          },
-                    icon: const Icon(Icons.close_rounded, color: Colors.white),
-                  ),
-                  const Expanded(
-                    child: Text(
-                      'Create reel',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: canPost ? _uploadReel : null,
-                    child: _isUploading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(
-                            'Post',
-                            style: TextStyle(
-                              color: canPost ? Colors.white : Colors.white38,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
-                  ),
-                ],
-              ),
-            ),
+            // 🔝 Top Navigation Bar (Close, Title, Next / Share)
+            _buildTopBar(),
+
+            // 📱 Step Content
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeroSection(),
-                    const SizedBox(height: 18),
-                    _buildInfoCards(),
-                    const SizedBox(height: 18),
-                    _buildDetailsCard(),
-                    const SizedBox(height: 18),
-                    _buildPostCard(),
-                  ],
-                ),
-              ),
+              child: _currentStep == 1
+                  ? _buildStepOneMediaPreview()
+                  : _buildStepTwoDetails(),
             ),
+
+            // 🎛️ Bottom Instagram-Style Mode Selector (Only on Step 1)
+            if (_currentStep == 1) _buildBottomModeSelector(),
           ],
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: SizedBox(
-            height: 56,
-            child: ElevatedButton(
-              onPressed: !canInteract
-                  ? null
-                  : hasSelectedVideo
-                  ? _uploadReel
-                  : _openSourcePicker,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _kUploadPink,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: _kUploadPink.withValues(alpha: 0.55),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: _isTrimming
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'Preparing reel...',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    )
-                  : _isEditing
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'Opening editor...',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
-                      hasSelectedVideo ? 'Upload reel' : 'Choose reel video',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-            ),
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeroSection() {
-    if (_selectedVideoFile == null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-        decoration: BoxDecoration(
-          color: const Color(0xFF111111),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white10),
+  /// 🔝 Clean Top Bar matching Instagram Camera
+  Widget _buildTopBar() {
+    final bool hasMedia = _selectedFile != null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            icon: Icon(
+              _currentStep == 2 ? Icons.arrow_back_ios_new_rounded : Icons.close_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+            onPressed: () {
+              if (_currentStep == 2) {
+                setState(() => _currentStep = 1);
+              } else {
+                _finishAndNavigate();
+              }
+            },
+          ),
+          Text(
+            _currentStep == 1 ? 'New $_activeMode' : 'Share',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.3,
+            ),
+          ),
+          if (_currentStep == 1)
+            TextButton(
+              onPressed: hasMedia ? () => setState(() => _currentStep = 2) : null,
+              child: Text(
+                'Next',
+                style: TextStyle(
+                  color: hasMedia ? const Color(0xFF3897F0) : Colors.white24,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          else
+            TextButton(
+              onPressed: _isUploading ? null : _shareContent,
+              child: _isUploading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3897F0)),
+                    )
+                  : const Text(
+                      'Share',
+                      style: TextStyle(
+                        color: Color(0xFF3897F0),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 🎬 Step 1: Media Preview & Change Options
+  Widget _buildStepOneMediaPreview() {
+    return Column(
+      children: [
+        // Media Preview Container (Square / 4:5 Instagram aspect)
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF121214),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: _selectedFile == null
+                  ? _buildEmptyMediaCard()
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (_isVideo && _videoController != null && _videoController!.value.isInitialized)
+                          Center(
+                            child: AspectRatio(
+                              aspectRatio: _videoController!.value.aspectRatio,
+                              child: VideoPlayer(_videoController!),
+                            ),
+                          )
+                        else if (!_isVideo && _selectedFile != null)
+                          Image.file(
+                            _selectedFile!,
+                            fit: BoxFit.contain,
+                          )
+                        else
+                          const Center(
+                            child: CircularProgressIndicator(color: _kUploadPink),
+                          ),
+
+                        // Play/Pause Overlay for Videos
+                        if (_isVideo)
+                          Center(
+                            child: GestureDetector(
+                              onTap: () {
+                                if (_videoController == null) return;
+                                setState(() {
+                                  if (_videoController!.value.isPlaying) {
+                                    _videoController!.pause();
+                                    _isPlaying = false;
+                                  } else {
+                                    _videoController!.play();
+                                    _isPlaying = true;
+                                  }
+                                });
+                              },
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.55),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 36,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ),
         ),
-        child: Column(
+
+        // Quick Gallery / Camera Switcher Row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickMediaFromGallery,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white24),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.photo_library_outlined, size: 18),
+                  label: const Text('Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _pickMediaFromCamera,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF262626),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                  label: const Text('Camera', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 📭 Empty state when no media is chosen yet
+  Widget _buildEmptyMediaCard() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _kUploadPink.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              (_activeMode == 'POST') ? Icons.photo_outlined : Icons.videocam_outlined,
+              color: _kUploadPink,
+              size: 48,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Select $_activeMode Media',
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Tap Gallery or Camera to select content',
+            style: TextStyle(color: Colors.white54, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 📝 Step 2: Instagram-style Caption & Share Details
+  Widget _buildStepTwoDetails() {
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Media Thumbnail + Caption Input Row
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: _kUploadPink.withValues(alpha: 0.16),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white24),
+                color: const Color(0xFF1E1E24),
               ),
-              child: const Icon(
-                Icons.smart_display_rounded,
-                color: Colors.white,
-                size: 34,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: _selectedFile != null
+                    ? (_isVideo
+                        ? const Center(child: Icon(Icons.play_circle_fill_rounded, color: Colors.white70, size: 30))
+                        : Image.file(_selectedFile!, fit: BoxFit.cover))
+                    : const SizedBox(),
               ),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              'Upload a short reel',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Select a video, trim it to ${_maxReelDuration.inSeconds} seconds or less, then upload it as a reel.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
-                fontSize: 14,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 22),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isVideoLoading
-                        ? null
-                        : () => _pickVideo(ImageSource.gallery),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white24),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    icon: const Icon(Icons.video_library_outlined),
-                    label: const Text('Gallery'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isVideoLoading
-                        ? null
-                        : () => _pickVideo(ImageSource.camera),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _kUploadPink,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    icon: const Icon(Icons.videocam_outlined),
-                    label: const Text('Camera'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: SizedBox(
-              width: double.infinity,
-              height: 360,
-              child: ColoredBox(
-                color: Colors.black,
-                child: _isVideoLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(color: _kUploadPink),
-                      )
-                    : VideoViewer(trimmer: _trimmer),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  path.basename(_selectedVideoFile!.path),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              TextButton.icon(
-                onPressed: _isUploading ? null : _clearSelectedVideo,
-                icon: const Icon(Icons.delete_outline_rounded),
-                label: const Text('Remove'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white70),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Trim reel',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Keep the most important part of the clip. Reels cannot exceed ${_maxReelDuration.inSeconds} seconds.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _DurationLimitSelector(
-            selectedLimit: _maxReelDuration,
-            onChanged: _isUploading || _isVideoLoading || _isTrimming
-                ? null
-                : _updateMaxDuration,
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _TimelineInfoPill(
-                  label: 'Start',
-                  value: _formatDuration(_trimStartDuration),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _TimelineInfoPill(
-                  label: 'End',
-                  value: _formatDuration(_trimEndDuration),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _TimelineInfoPill(
-                  label: 'Clip',
-                  value: _formatDuration(_selectedDuration),
-                  highlight: true,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _SelectedDurationProgress(
-            selected: _selectedDuration,
-            maxAllowed: _maxReelDuration,
-          ),
-          const SizedBox(height: 12),
-          Padding(
-            // Extra left breathing space makes grabbing the start handle easier.
-            padding: const EdgeInsets.only(left: 14),
-            child: TrimViewer(
-              trimmer: _trimmer,
-              viewerHeight: 64,
-              viewerWidth: MediaQuery.of(context).size.width - 86,
-              maxVideoLength: _maxReelDuration,
-              onChangeStart: (value) {
-                _onTrimChanged(start: value, end: _trimEnd);
-              },
-              onChangeEnd: (value) {
-                _onTrimChanged(start: _trimStart, end: value);
-              },
-              onChangePlaybackState: (value) {
-                setState(() {
-                  _isPlaying = value;
-                });
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: IconButton.filled(
-              onPressed: _isUploading || _isVideoLoading
-                  ? null
-                  : _togglePlayback,
-              style: IconButton.styleFrom(
-                backgroundColor: _kUploadPink,
-                foregroundColor: Colors.white,
-                fixedSize: const Size(56, 56),
-              ),
-              icon: Icon(
-                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                size: 28,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCards() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        _InfoChip(label: 'Source', value: _selectedSourceLabel ?? 'No video'),
-        _InfoChip(
-          label: 'Original',
-          value: _videoDuration == null
-              ? '--:--'
-              : _formatDuration(_videoDuration!),
-        ),
-        _InfoChip(
-          label: 'Selected',
-          value: _selectedVideoFile == null
-              ? '--:--'
-              : _formatDuration(_selectedDuration),
-          highlight: _selectedVideoFile != null,
-        ),
-        _InfoChip(
-          label: 'Limit',
-          value: _formatDuration(_maxReelDuration),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailsCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Reel details',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'These fields map directly to the multipart form-data API payload.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Reel Type *',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _videoType = 'normal'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: _videoType == 'normal'
-                          ? _kUploadPink.withValues(alpha: 0.18)
-                          : const Color(0xFF1E1E1E),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _videoType == 'normal' ? _kUploadPink : Colors.white12,
-                        width: _videoType == 'normal' ? 1.5 : 1.0,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.movie_creation_outlined,
-                          color: _videoType == 'normal' ? _kUploadPink : Colors.white54,
-                          size: 22,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Simple Reel',
-                          style: TextStyle(
-                            color: _videoType == 'normal' ? Colors.white : Colors.white70,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Standard Creator Content',
-                          style: TextStyle(color: Colors.white38, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _videoType = 'ads'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: _videoType == 'ads'
-                          ? const Color(0xFFFF8008).withValues(alpha: 0.18)
-                          : const Color(0xFF1E1E1E),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _videoType == 'ads' ? const Color(0xFFFF8008) : Colors.white12,
-                        width: _videoType == 'ads' ? 1.5 : 1.0,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.campaign_rounded,
-                          color: _videoType == 'ads' ? const Color(0xFFFF8008) : Colors.white54,
-                          size: 22,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Promotion / Ad',
-                          style: TextStyle(
-                            color: _videoType == 'ads' ? Colors.white : Colors.white70,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Sponsored Campaign Reel',
-                          style: TextStyle(color: Colors.white38, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (_videoType == 'ads') ...[
-            const SizedBox(height: 14),
-            _UploadField(
-              controller: _targetUrlController,
-              label: 'Target URL / Website Link *',
-              hintText: 'https://yourwebsite.com or CTA link',
-            ),
-            const SizedBox(height: 14),
-            _UploadField(
-              controller: _budgetController,
-              label: 'Promotion Budget (₹) *',
-              hintText: 'e.g. 500.00',
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-          ],
-          const SizedBox(height: 18),
-          _UploadField(
-            controller: _titleController,
-            label: 'Title *',
-            hintText: 'Enter reel title or caption',
-          ),
-          const SizedBox(height: 14),
-          _UploadField(
-            controller: _subjectController,
-            label: 'Subject *',
-            hintText: 'Describe the reel topic, hashtags, and description',
-            maxLines: 2,
-          ),
-          const SizedBox(height: 14),
-          _UploadField(
-            controller: _nameController,
-            label: 'Creator / Display Name (Optional)',
-            hintText: 'Leave empty to use your registered username',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPostCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Posting rules',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _RuleRow(
-            text: 'Only video files can be selected for reels.',
-            isActive: true,
-          ),
-          _RuleRow(
-            text:
-                'Trim selection is capped by the chosen 30 or 60 second limit.',
-            isActive: true,
-          ),
-          _RuleRow(
-            text:
-                'Upload uses multipart/form-data with subject, name, and video.',
-            isActive: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _UploadField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hintText;
-  final int maxLines;
-  final TextInputType? keyboardType;
-
-  const _UploadField({
-    required this.controller,
-    required this.label,
-    required this.hintText,
-    this.maxLines = 1,
-    this.keyboardType,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          keyboardType: keyboardType,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.38)),
-            filled: true,
-            fillColor: const Color(0xFF1C1C1C),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool highlight;
-
-  const _InfoChip({
-    required this.label,
-    required this.value,
-    this.highlight = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 154,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: highlight
-            ? _kUploadPink.withValues(alpha: 0.12)
-            : const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: highlight
-              ? _kUploadPink.withValues(alpha: 0.35)
-              : Colors.white10,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.64),
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TimelineInfoPill extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool highlight;
-
-  const _TimelineInfoPill({
-    required this.label,
-    required this.value,
-    this.highlight = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: highlight
-            ? _kUploadPink.withValues(alpha: 0.14)
-            : const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: highlight
-              ? _kUploadPink.withValues(alpha: 0.40)
-              : Colors.white10,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.60),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DurationLimitSelector extends StatelessWidget {
-  final Duration selectedLimit;
-  final ValueChanged<Duration>? onChanged;
-
-  const _DurationLimitSelector({
-    required this.selectedLimit,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: _kAvailableReelLimits.map((limit) {
-        final isSelected = limit == selectedLimit;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              right: limit == _kAvailableReelLimits.last ? 0 : 10,
-            ),
-            child: InkWell(
-              onTap: onChanged == null ? null : () => onChanged!(limit),
-              borderRadius: BorderRadius.circular(16),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? _kUploadPink.withValues(alpha: 0.18)
-                      : const Color(0xFF1A1A1A),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? _kUploadPink.withValues(alpha: 0.60)
-                        : Colors.white10,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.timelapse_rounded,
-                      size: 18,
-                      color: isSelected ? Colors.white : Colors.white70,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${limit.inSeconds}s max',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _SelectedDurationProgress extends StatelessWidget {
-  final Duration selected;
-  final Duration maxAllowed;
-
-  const _SelectedDurationProgress({
-    required this.selected,
-    required this.maxAllowed,
-  });
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final maxMs = maxAllowed.inMilliseconds == 0 ? 1 : maxAllowed.inMilliseconds;
-    final ratio = (selected.inMilliseconds / maxMs).clamp(0.0, 1.0).toDouble();
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Selected ${_formatDuration(selected)}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                'Max ${_formatDuration(maxAllowed)}',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.66),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 6,
-              backgroundColor: Colors.white10,
-              valueColor: const AlwaysStoppedAnimation<Color>(_kUploadPink),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RuleRow extends StatelessWidget {
-  final String text;
-  final bool isActive;
-
-  const _RuleRow({required this.text, required this.isActive});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isActive
-                ? Icons.check_circle_rounded
-                : Icons.radio_button_unchecked,
-            color: isActive ? _kUploadPink : Colors.white24,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.82),
-                fontSize: 13,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SourceActionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _SourceActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1C),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: _kUploadPink.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: Colors.white),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.62),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+              child: TextField(
+                controller: _captionController,
+                maxLines: 4,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Write a caption...',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                  border: InputBorder.none,
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            const Icon(Icons.chevron_right_rounded, color: Colors.white54),
           ],
         ),
-      ),
-    );
-  }
-}
+        const Divider(color: Colors.white12, height: 32),
 
-class _ReelVideoEditorScreen extends StatefulWidget {
-  final File sourceFile;
-  final Duration maxDuration;
-
-  const _ReelVideoEditorScreen({
-    required this.sourceFile,
-    required this.maxDuration,
-  });
-
-  @override
-  State<_ReelVideoEditorScreen> createState() => _ReelVideoEditorScreenState();
-}
-
-class _ReelVideoEditorScreenState extends State<_ReelVideoEditorScreen> {
-  late final VideoEditorController _controller = VideoEditorController.file(
-    widget.sourceFile,
-    minDuration: const Duration(seconds: 1),
-    maxDuration: widget.maxDuration,
-  );
-
-  bool _isInitializing = true;
-  bool _isExporting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initEditor();
-  }
-
-  Future<void> _initEditor() async {
-    try {
-      await _controller.initialize(aspectRatio: 9 / 16);
-      _controller.cropAspectRatio(9 / 16);
-      if (!mounted) return;
-      setState(() {
-        _isInitializing = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unable to open video editor.\n$error'),
-          backgroundColor: const Color(0xFF242424),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-
-  Future<void> _togglePlayback() async {
-    if (_isInitializing || _isExporting) return;
-
-    if (_controller.isPlaying) {
-      await _controller.video.pause();
-      return;
-    }
-
-    await _controller.video.play();
-  }
-
-  Future<void> _exportEditedVideo() async {
-    if (_isInitializing || _isExporting) return;
-
-    setState(() {
-      _isExporting = true;
-    });
-
-    try {
-      final config = VideoFFmpegVideoEditorConfig(
-        _controller,
-        name: 'reel_${DateTime.now().millisecondsSinceEpoch}',
-      );
-      final execute = await config.getExecuteConfig();
-      final session = await FFmpegKit.execute(execute.command);
-      final returnCode = await session.getReturnCode();
-
-      if (!mounted) return;
-
-      if (ReturnCode.isSuccess(returnCode)) {
-        Navigator.of(context).pop(File(execute.outputPath));
-        return;
-      }
-
-      final logs = await session.getOutput();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to export edited video.\n${logs ?? 'Unknown export error.'}',
-          ),
-          backgroundColor: const Color(0xFF242424),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to export edited video.\n$error'),
-          backgroundColor: const Color(0xFF242424),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isExporting = false;
-        });
-      }
-    }
-  }
-
-  Widget _buildRatioButton({
-    required String label,
-    required double ratio,
-  }) {
-    final selected = (_controller.preferredCropAspectRatio ?? 0) == ratio;
-    return Expanded(
-      child: OutlinedButton(
-        onPressed: _isExporting
-            ? null
-            : () {
-                _controller.cropAspectRatio(ratio);
-                setState(() {});
-              },
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(
-            color: selected ? _kUploadPink : Colors.white24,
-          ),
-          foregroundColor: Colors.white,
-        ),
-        child: Text(label),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: const Text('Edit reel'),
-        actions: [
-          TextButton(
-            onPressed: _isExporting ? null : _exportEditedVideo,
-            child: _isExporting
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text(
-                    'Done',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-          ),
-        ],
-      ),
-      body: _isInitializing
-          ? const Center(child: CircularProgressIndicator(color: _kUploadPink))
-          : Column(
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: CropGridViewer.edit(controller: _controller),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Start ${_formatDuration(_controller.startTrim)}',
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                      ),
-                      Text(
-                        'Clip ${_formatDuration(_controller.trimmedDuration)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          'End ${_formatDuration(_controller.endTrim)}',
-                          textAlign: TextAlign.end,
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  // Keep a little more left-side space near 00:00 handle.
-                  padding: const EdgeInsets.fromLTRB(18, 0, 12, 0),
-                  child: TrimSlider(
-                    controller: _controller,
-                    height: 64,
-                    horizontalMargin: 24,
-                    child: TrimTimeline(
-                      controller: _controller,
-                      padding: const EdgeInsets.fromLTRB(16, 10, 10, 0),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-                  child: Row(
-                    children: [
-                      _buildRatioButton(label: '9:16', ratio: 9 / 16),
-                      const SizedBox(width: 10),
-                      _buildRatioButton(label: '4:5', ratio: 4 / 5),
-                      const SizedBox(width: 10),
-                      _buildRatioButton(label: '1:1', ratio: 1),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _isExporting
-                              ? null
-                              : () => _controller.rotate90Degrees(
-                                    RotateDirection.left,
-                                  ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.white24),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          icon: const Icon(Icons.rotate_left),
-                          label: const Text('Rotate'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _isExporting ? null : _togglePlayback,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _kUploadPink,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          icon: Icon(
-                            _controller.isPlaying
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                          ),
-                          label: Text(
-                            _controller.isPlaying ? 'Pause' : 'Play',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        // Audio Track Input
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.music_note_rounded, color: Colors.white70),
+          title: TextField(
+            controller: _audioTitleController,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Add music / sound title...',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+              border: InputBorder.none,
             ),
+          ),
+        ),
+        const Divider(color: Colors.white12, height: 24),
+
+        // If AD Mode: Budget and Target URL Settings
+        if (_activeMode == 'AD') ...[
+          const Text(
+            'Promotion Settings 📢',
+            style: TextStyle(color: _kUploadPink, fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _targetUrlController,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: const Color(0xFF1E1E24),
+              prefixIcon: const Icon(Icons.link_rounded, color: Colors.white60),
+              hintText: 'Target Website Link (https://...)',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _budgetController,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: const Color(0xFF1E1E24),
+              prefixIcon: const Icon(Icons.currency_rupee_rounded, color: Colors.white60),
+              hintText: 'Daily Budget (e.g. 500)',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+
+        const SizedBox(height: 24),
+        // Big Gradient Share Button
+        SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: ElevatedButton(
+            onPressed: _isUploading ? null : _shareContent,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _activeMode == 'STORY' ? const Color(0xFFFBAA47) : _kUploadPink,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: _isUploading
+                ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                : Text(
+                    _activeMode == 'STORY'
+                        ? 'Share to Your Story 🌟'
+                        : (_activeMode == 'AD' ? 'Launch Promotion 📢' : 'Share Post 🚀'),
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 🎛️ Bottom Mode Selector matching Instagram Camera UI (POST | STORY | REEL | AD)
+  Widget _buildBottomModeSelector() {
+    return Container(
+      height: 52,
+      color: Colors.black,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: _modes.map((mode) {
+          final isSelected = _activeMode == mode;
+          bool isDisabled = false;
+          if (_selectedFile != null) {
+            if (_isVideo && mode == 'POST') isDisabled = true;
+            if (!_isVideo && (mode == 'REEL' || mode == 'AD')) isDisabled = true;
+          }
+
+          return GestureDetector(
+            onTap: () => _onModeChanged(mode),
+            child: Opacity(
+              opacity: isDisabled ? 0.28 : 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white.withOpacity(0.12) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  mode,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white38,
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                    letterSpacing: 0.8,
+                    decoration: isDisabled ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

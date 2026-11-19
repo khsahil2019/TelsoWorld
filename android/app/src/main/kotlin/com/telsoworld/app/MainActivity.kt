@@ -1,4 +1,4 @@
-package com.example.telsoworld
+package com.telsoworld.app
 
 import io.flutter.embedding.android.FlutterActivity
 

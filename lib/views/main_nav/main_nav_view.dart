@@ -1,23 +1,25 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:telsoworld/controllers/main_nav_controller.dart';
-import 'package:telsoworld/core/constants/app_colors.dart';
+import 'package:telsoworld/core/constants/api_endpoints.dart';
+import 'package:telsoworld/core/services/session_token_store.dart';
+import 'package:telsoworld/core/services/storage_service.dart';
 import 'package:telsoworld/views/feed/feed_view.dart';
 import 'package:telsoworld/views/inbox/inbox_view.dart';
 import 'package:telsoworld/views/profile/profile_view.dart';
 import 'package:telsoworld/views/search/search_view.dart';
-import 'package:telsoworld/views/upload/reel_upload_view.dart';
 
 /// ---------------------------------------------------------------------------
-/// 📱 MainNavView (Modern Glassmorphic Bottom Navigation Bar)
+/// 📱 MainNavView (Instagram-Style 5-Tab Navigation Bar)
 /// ---------------------------------------------------------------------------
-/// Yeh class app ka main container shell hai jisme 5 screens load hoti hain:
-/// 1. Home (Reels Feed)
-/// 2. Discovery (Explore & Trending Hub)
-/// 3. Upload (Create Reel with TikTok-style glowing center button)
-/// 4. Inbox (Messages & Notifications with unread badge)
-/// 5. Profile (Creator Studio & Account Hub)
+/// 1. Home (Feed with Stories Tray & Posts)
+/// 2. Reels (Immersive Vertical Fullscreen Video Swiper)
+/// 3. Direct Messages (Inbox & 1-on-1 Requests)
+/// 4. Search (Discovery & Trending Hub)
+/// 5. Profile (Creator Studio, Highlights, Reels & Photos)
 /// ---------------------------------------------------------------------------
 class MainNavView extends StatefulWidget {
   const MainNavView({super.key});
@@ -31,19 +33,53 @@ class _MainNavViewState extends State<MainNavView> {
   DateTime? _lastBackPressTime;
 
   @override
+  void initState() {
+    super.initState();
+    _fetchUserAvatar();
+  }
+
+  Future<void> _fetchUserAvatar() async {
+    try {
+      final token = await SessionTokenStore.getToken();
+      if (token.isEmpty) return;
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/my-profile');
+      final res = await http
+          .get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final j = jsonDecode(res.body);
+        final img = j['data']?['profile_image']?.toString() ?? '';
+        if (img.isNotEmpty) {
+          final storage = Get.isRegistered<StorageService>()
+              ? Get.find<StorageService>()
+              : null;
+          storage?.setProfileImage(img);
+        }
+      }
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
 
-        // Agar user kisi aur tab par hai toh pehle Home Tab (0) par le aao
+        // If user is on another tab, back navigates to Home Tab (0) first
         if (controller.currentIndex.value != 0) {
           controller.changeTab(0);
           return;
         }
 
-        // Home Tab par double-tap back confirmation se hi app exit hogi
+        // Home Tab double-tap back confirmation exits app
         final now = DateTime.now();
         if (_lastBackPressTime == null ||
             now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
@@ -70,10 +106,15 @@ class _MainNavViewState extends State<MainNavView> {
           return IndexedStack(
             index: currentTab,
             children: [
-              FeedScreen(visible: currentTab == 0),
-              const DiscoveryScreen(),
-              const ReelUploadScreen(),
+              // 0: Home Feed (Top bar, Stories tray, Feed)
+              FeedScreen(visible: currentTab == 0, isReelsOnly: false),
+              // 1: Reels Tab (Immersive full-screen reels)
+              FeedScreen(visible: currentTab == 1, isReelsOnly: true),
+              // 2: Direct Messenger
               const InboxScreen(),
+              // 3: Search / Explore
+              const DiscoveryScreen(),
+              // 4: Profile
               const ProfileScreen(),
             ],
           );
@@ -83,70 +124,71 @@ class _MainNavViewState extends State<MainNavView> {
     );
   }
 
-  /// 🌟 Custom TikTok/Instagram Luxury Glassmorphic Bottom Navigation Bar
+  /// 🌟 Instagram Exact 5-Icon Clean Bottom Navigation Bar
   Widget _buildCustomBottomBar() {
     final int current = controller.currentIndex.value;
+    final storage = Get.isRegistered<StorageService>()
+        ? Get.find<StorageService>()
+        : null;
+    final userAvatar = storage?.profileImage.value.isNotEmpty == true
+        ? storage!.profileImage.value
+        : (storage?.getProfileImage() ?? '');
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0D14).withOpacity(0.96),
+        color: Colors.black,
         border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.08), width: 0.8),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
+          top: BorderSide(
+            color: Colors.white.withValues(alpha: 0.12),
+            width: 0.6,
           ),
-        ],
+        ),
       ),
       child: SafeArea(
         top: false,
         child: Container(
-          height: 60,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // 1. Home Tab
-              _buildNavItem(
+              // 1. Home Icon
+              _buildIconItem(
                 index: 0,
                 selectedIndex: current,
-                label: 'Home',
                 icon: Icons.home_outlined,
-                activeIcon: Icons.home_rounded,
+                activeIcon: Icons.home_filled,
               ),
 
-              // 2. Discovery Tab
-              _buildNavItem(
+              // 2. Reels Icon
+              _buildIconItem(
                 index: 1,
                 selectedIndex: current,
-                label: 'Discover',
-                icon: Icons.explore_outlined,
-                activeIcon: Icons.explore_rounded,
+                icon: Icons.smart_display_outlined,
+                activeIcon: Icons.smart_display_rounded,
               ),
 
-              // 3. Center Create Reel Floating Button
-              _buildCenterUploadButton(isSelected: current == 2),
+              // 3. Direct Message / Messenger Icon
+              _buildIconItem(
+                index: 2,
+                selectedIndex: current,
+                icon: Icons.near_me_outlined,
+                activeIcon: Icons.send_rounded,
+              ),
 
-              // 4. Inbox Tab
-              _buildNavItem(
+              // 4. Search Icon
+              _buildIconItem(
                 index: 3,
                 selectedIndex: current,
-                label: 'Inbox',
-                icon: Icons.chat_bubble_outline_rounded,
-                activeIcon: Icons.chat_bubble_rounded,
-                badgeCount: 3,
+                icon: Icons.search_rounded,
+                activeIcon: Icons.search,
               ),
 
-              // 5. Profile Tab
-              _buildNavItem(
+              // 5. Profile Avatar Tab
+              _buildProfileItem(
                 index: 4,
                 selectedIndex: current,
-                label: 'Profile',
-                icon: Icons.person_outline_rounded,
-                activeIcon: Icons.person_rounded,
+                avatarUrl: userAvatar,
               ),
             ],
           ),
@@ -155,134 +197,108 @@ class _MainNavViewState extends State<MainNavView> {
     );
   }
 
-  /// 🔘 Regular Navigation Tab Item with Animated Scaling & Glow
-  Widget _buildNavItem({
+  /// 🔘 Clean Icon Tab Item matching Instagram
+  Widget _buildIconItem({
     required int index,
     required int selectedIndex,
-    required String label,
     required IconData icon,
     required IconData activeIcon,
     int badgeCount = 0,
   }) {
     final bool isSelected = selectedIndex == index;
 
-    return Expanded(
-      child: InkWell(
-        onTap: () => controller.changeTab(index),
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: isSelected
-                        ? AppColors.primaryPink.withOpacity(0.15)
-                        : Colors.transparent,
-                  ),
-                  child: Icon(
-                    isSelected ? activeIcon : icon,
-                    color: isSelected ? const Color(0xFFFF2A6D) : Colors.white60,
-                    size: 22,
-                  ),
-                ),
-                if (badgeCount > 0 && !isSelected)
-                  Positioned(
-                    right: 4,
-                    top: 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF2A6D),
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
+    return InkWell(
+      onTap: () => controller.changeTab(index),
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Center(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                isSelected ? activeIcon : icon,
+                color: isSelected
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.72),
+                size: 28,
+              ),
+              if (badgeCount > 0 && !isSelected)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF2A6D),
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 7,
+                      minHeight: 7,
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white54,
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// 🌟 Distinct TikTok-style Center Upload Button with Neon Borders & Gradient
-  Widget _buildCenterUploadButton({required bool isSelected}) {
-    return GestureDetector(
-      onTap: () => controller.changeTab(2),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
+  /// 👤 Profile Tab Item with circular avatar
+  Widget _buildProfileItem({
+    required int index,
+    required int selectedIndex,
+    required String avatarUrl,
+  }) {
+    final bool isSelected = selectedIndex == index;
+
+    return InkWell(
+      onTap: () => controller.changeTab(index),
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: SizedBox(
         width: 48,
-        height: 34,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Left Cyan Accent
-            Positioned(
-              left: 0,
-              child: Container(
-                width: 38,
-                height: 32,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: const Color(0xFF00E5FF),
-                ),
+        height: 48,
+        child: Center(
+          child: Container(
+            width: 30,
+            height: 30,
+            padding: const EdgeInsets.all(1.5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected ? Colors.white : Colors.transparent,
+                width: 1.8,
               ),
             ),
-            // Right Pink Accent
-            Positioned(
-              right: 0,
-              child: Container(
-                width: 38,
-                height: 32,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: const Color(0xFFD70F64),
-                ),
-              ),
+            child: ClipOval(
+              child: avatarUrl.isNotEmpty
+                  ? Image.network(
+                      ApiEndpoints.mediaUrl(avatarUrl),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFF2E2E38),
+                        child: const Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      color: const Color(0xFF2E2E38),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
             ),
-            // Center White/Dark Core with + Icon
-            Container(
-              width: 40,
-              height: 32,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.4),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.add_rounded,
-                  color: Colors.black,
-                  size: 24,
-                  weight: 800,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

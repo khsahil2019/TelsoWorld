@@ -4,6 +4,7 @@ class UserModel {
   final String email;
   final String? mobileNo;
   final String? schoolName;
+  final String? profileImage;
   final String? token;
 
   UserModel({
@@ -12,6 +13,7 @@ class UserModel {
     required this.email,
     this.mobileNo,
     this.schoolName,
+    this.profileImage,
     this.token,
   });
 
@@ -22,6 +24,7 @@ class UserModel {
       email: json['email']?.toString() ?? '',
       mobileNo: json['mobile_no']?.toString(),
       schoolName: json['school_name']?.toString(),
+      profileImage: json['profile_image']?.toString(),
       token: json['token']?.toString(),
     );
   }
@@ -33,6 +36,7 @@ class UserModel {
       'email': email,
       'mobile_no': mobileNo,
       'school_name': schoolName,
+      'profile_image': profileImage,
       'token': token,
     };
   }

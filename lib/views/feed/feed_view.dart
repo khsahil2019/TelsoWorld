@@ -10,31 +10,17 @@ import 'package:logger/logger.dart';
 import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/routes/app_route_observer.dart';
 import 'package:telsoworld/views/ads/ads_view.dart';
+import 'package:telsoworld/views/story/story_tray_widget.dart';
+import 'package:telsoworld/views/inbox/inbox_view.dart';
+import 'package:telsoworld/views/notifications/notifications_view.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:telsoworld/core/services/storage_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
-String get _kApiHost => ApiEndpoints.host;
-
 String _normalizeVideoUrl(String rawPath) {
-  final trimmed = rawPath.trim();
-  if (trimmed.isEmpty) return '';
-
-  final normalizedSlashes = trimmed.replaceAll(r'\/', '/');
-  final encoded = Uri.encodeFull(normalizedSlashes);
-  final uri = Uri.tryParse(encoded);
-  if (uri != null && uri.hasScheme && uri.host.isNotEmpty) {
-    return uri.toString();
-  }
-
-  String safePath = encoded.startsWith('/') ? encoded : '/$encoded';
-  if (!safePath.startsWith('/storage/') &&
-      (safePath.startsWith('/videos/') || safePath.startsWith('/ad-videos/'))) {
-    safePath = '/storage$safePath';
-  }
-  return 'http://$_kApiHost$safePath';
+  return ApiEndpoints.mediaUrl(rawPath);
 }
 
 int _toInt(dynamic value, {int fallback = 0}) {
@@ -85,10 +71,16 @@ class VideoItem {
   final String subject;
   final String name;
   final String videoPath;
+  final String photoUrl;
+  final String mediaType; // 'video' | 'photo'
+  final bool hasAudio;
+  final String audioTitle;
   final int likesCount;
   final int sharesCount;
+
   /// API: `"normal"` | `"ads"` (dashboard `video_type`).
   final String videoType;
+
   /// API: true => liked, false => not liked.
   final bool liked;
 
@@ -99,26 +91,61 @@ class VideoItem {
     required this.subject,
     required this.name,
     required this.videoPath,
+    this.photoUrl = '',
+    this.mediaType = 'video',
+    this.hasAudio = false,
+    this.audioTitle = '',
     required this.likesCount,
     required this.sharesCount,
     required this.videoType,
     required this.liked,
   });
 
-  factory VideoItem.fromJson(Map<String, dynamic> json) => VideoItem(
-    id: json['id'] as int? ?? 0,
-    userId: _toInt(json['user_id']),
-    username: json['username']?.toString() ?? '',
-    subject: json['subject']?.toString() ?? '',
-    name: json['name']?.toString() ?? 'Unknown',
-    videoPath: _normalizeVideoUrl(
-      json['video_url']?.toString() ?? json['video_path']?.toString() ?? '',
-    ),
-    likesCount: _toInt(json['likes_count']),
-    sharesCount: _toInt(json['shares_count']),
-    videoType: json['video_type']?.toString() ?? 'normal',
-    liked: _toBool(json['liked'] ?? json['is_liked']),
-  );
+  factory VideoItem.fromJson(Map<String, dynamic> json) {
+    final rawType = json['media_type']?.toString().toLowerCase().trim() ?? '';
+    final rawVideoUrl = (json['video_url'] ??
+        json['video_path'] ??
+        json['url'] ??
+        '').toString().trim();
+    final rawPhotoUrl = (json['photo_url'] ??
+        json['image'] ??
+        json['thumbnail_url'] ??
+        '').toString().trim();
+
+    final isPhoto = rawType == 'photo' ||
+        rawVideoUrl.toLowerCase().endsWith('.jpg') ||
+        rawVideoUrl.toLowerCase().endsWith('.png') ||
+        rawVideoUrl.toLowerCase().endsWith('.jpeg') ||
+        rawVideoUrl.toLowerCase().endsWith('.webp') ||
+        rawPhotoUrl.toLowerCase().endsWith('.jpg') ||
+        rawPhotoUrl.toLowerCase().endsWith('.png') ||
+        rawPhotoUrl.toLowerCase().endsWith('.jpeg') ||
+        rawPhotoUrl.toLowerCase().endsWith('.webp');
+
+    String photo = '';
+    if (rawPhotoUrl.isNotEmpty) {
+      photo = _normalizeVideoUrl(rawPhotoUrl);
+    } else if (isPhoto && rawVideoUrl.isNotEmpty) {
+      photo = _normalizeVideoUrl(rawVideoUrl);
+    }
+
+    return VideoItem(
+      id: json['id'] as int? ?? 0,
+      userId: _toInt(json['user_id']),
+      username: json['username']?.toString() ?? '',
+      subject: json['subject']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Unknown',
+      videoPath: _normalizeVideoUrl(rawVideoUrl),
+      photoUrl: photo,
+      mediaType: isPhoto ? 'photo' : 'video',
+      hasAudio: _toBool(json['has_audio'], fallback: true),
+      audioTitle: json['audio_title']?.toString() ?? '',
+      likesCount: _toInt(json['likes_count']),
+      sharesCount: _toInt(json['shares_count']),
+      videoType: json['video_type']?.toString() ?? 'normal',
+      liked: _toBool(json['liked'] ?? json['is_liked']),
+    );
+  }
 }
 
 class DashboardSetting {
@@ -182,12 +209,13 @@ class CommentItem {
   );
 
   CommentItem copyWith({
+    String? comment,
     int? likes,
     bool? isLiked,
   }) {
     return CommentItem(
       id: id,
-      comment: comment,
+      comment: comment ?? this.comment,
       user: user,
       userId: userId,
       profileImage: profileImage,
@@ -204,9 +232,14 @@ class CommentItem {
 // ─────────────────────────────────────────
 class FeedScreen extends StatefulWidget {
   /// When false (e.g. another bottom tab is selected), feed videos pause.
-  const FeedScreen({super.key, this.visible = true});
+  const FeedScreen({
+    super.key,
+    this.visible = true,
+    this.isReelsOnly = false,
+  });
 
   final bool visible;
+  final bool isReelsOnly;
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -403,45 +436,101 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBinding
   // ── Build ─────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    if (widget.isReelsOnly) {
+      // 🎬 REELS TAB: Fullscreen Immersive Reels Swiper
+      return Scaffold(
+        backgroundColor: Colors.black,
+        extendBodyBehindAppBar: true,
+        body: _isLoading
+            ? const _LoadingView()
+            : _error != null
+                ? _ErrorView(message: _error!, onRetry: _fetchDashboard)
+                : _videos.isEmpty
+                    ? const _EmptyView()
+                    : RefreshIndicator(
+                        onRefresh: () => _fetchDashboard(isRefresh: true),
+                        color: const Color(0xFFD70F64),
+                        notificationPredicate: (notification) =>
+                            notification.depth == 0 && _currentPage == 0,
+                        child: PageView.builder(
+                          controller: _pageController,
+                          scrollDirection: Axis.vertical,
+                          physics: const PageScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
+                          itemCount: _videos.length,
+                          onPageChanged: (i) => setState(() => _currentPage = i),
+                          itemBuilder: (ctx, i) => _VideoPage(
+                            video: _videos[i],
+                            isActive: i == _currentPage && _playbackActive,
+                            isReelsOnly: true,
+                            onLikeSync: () => _fetchDashboard(isRefresh: true),
+                          ),
+                        ),
+                      ),
+      );
+    }
+
+    // 📱 HOME TAB: Clean Instagram Feed (Starts strictly below stories!)
     return Scaffold(
       backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // ── Main content ──
-          if (_isLoading)
-            const _LoadingView()
-          else if (_error != null)
-            _ErrorView(message: _error!, onRetry: _fetchDashboard)
-          else if (_videos.isEmpty)
-            const _EmptyView()
-          else
-            RefreshIndicator(
-              onRefresh: () => _fetchDashboard(isRefresh: true),
-              color: const Color(0xFFD70F64),
-              child: PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                itemCount: _videos.length,
-                onPageChanged: (i) => setState(() => _currentPage = i),
-                itemBuilder: (ctx, i) => _VideoPage(
-                  video: _videos[i],
-                  isActive: i == _currentPage && _playbackActive,
-                  onLikeSync: () => _fetchDashboard(isRefresh: true),
-                ),
-              ),
-            ),
-
-          // ── Top bar always visible ──
-          SafeArea(
-            bottom: false,
-            child: _TopBar(
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // 🔝 Top Bar: App Logo + "Telso World" | Create [+] | Heart & Chat
+            _TopBar(
               referralCode: _referralCode,
               onAdsTap: _openAdsVideos,
               hasSettingVideo: (_setting?.fileUploaded ?? '').isNotEmpty,
+              onTitleTap: () {
+                if (_pageController.hasClients) {
+                  _pageController.animateToPage(
+                    0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                  );
+                }
+              },
             ),
-          ),
-        ],
+
+            // 🌟 Instagram Stories Tray (Horizontal swiper)
+            const StoryTrayWidget(),
+
+            const SizedBox(height: 4),
+
+            // 🎬 Posts & Reels Feed: Starts strictly below the stories tray!
+            Expanded(
+              child: _isLoading
+                  ? const _LoadingView()
+                  : _error != null
+                      ? _ErrorView(message: _error!, onRetry: _fetchDashboard)
+                      : _videos.isEmpty
+                          ? const _EmptyView()
+                          : RefreshIndicator(
+                              onRefresh: () => _fetchDashboard(isRefresh: true),
+                              color: const Color(0xFFD70F64),
+                              notificationPredicate: (notification) =>
+                                  notification.depth == 0 && _currentPage == 0,
+                              child: PageView.builder(
+                                controller: _pageController,
+                                scrollDirection: Axis.vertical,
+                                physics: const PageScrollPhysics(
+                                  parent: BouncingScrollPhysics(),
+                                ),
+                                itemCount: _videos.length,
+                                onPageChanged: (i) => setState(() => _currentPage = i),
+                                itemBuilder: (ctx, i) => _VideoPage(
+                                  video: _videos[i],
+                                  isActive: i == _currentPage && _playbackActive,
+                                  isReelsOnly: false,
+                                  onLikeSync: () => _fetchDashboard(isRefresh: true),
+                                ),
+                              ),
+                            ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -530,11 +619,13 @@ class _EmptyView extends StatelessWidget {
 class _VideoPage extends StatefulWidget {
   final VideoItem video;
   final bool isActive;
+  final bool isReelsOnly;
   final Future<void> Function() onLikeSync;
 
   const _VideoPage({
     required this.video,
     required this.isActive,
+    this.isReelsOnly = false,
     required this.onLikeSync,
   });
 
@@ -580,6 +671,17 @@ class _VideoPageState extends State<_VideoPage>
   }
 
   Future<void> _initVideo() async {
+    if (widget.video.mediaType == 'photo') {
+      if (mounted) {
+        setState(() {
+          _initialized = true;
+          _hasError = false;
+        });
+        if (widget.isActive) _callViewApi();
+      }
+      return;
+    }
+
     final uriCandidates = _videoUriCandidates(widget.video.videoPath);
     if (uriCandidates.isEmpty) {
       debugPrint(
@@ -891,36 +993,416 @@ class _VideoPageState extends State<_VideoPage>
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.isReelsOnly) {
+      return _buildInstagramHomeCard();
+    }
+    return _buildReelsImmersivePage();
+  }
+
+  /// 📱 Instagram Home Feed Card (Starts below stories, full width, sleek header & footer)
+  Widget _buildInstagramHomeCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 1. Post Header (Avatar, Username with verified check, Audio info, Options)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: const Color(0xFF23232E),
+                child: Text(
+                  (widget.video.username.isNotEmpty ? widget.video.username : widget.video.name)[0].toUpperCase(),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          widget.video.username.isNotEmpty
+                              ? widget.video.username
+                              : widget.video.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.verified, color: Color(0xFF3897F0), size: 13),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.music_note, color: Colors.white60, size: 11),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            widget.video.audioTitle.isNotEmpty
+                                ? widget.video.audioTitle
+                                : 'Original audio • Telso World',
+                            style: const TextStyle(color: Colors.white60, fontSize: 11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+                onPressed: () {
+                  Get.bottomSheet(
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF161622),
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.share, color: Colors.white),
+                            title: const Text('Share', style: TextStyle(color: Colors.white)),
+                            onTap: () {
+                              Get.back();
+                              Share.share(
+                                'Watch this on Telso World! 🔥 https://telsoworld.com/reel/${widget.video.id}',
+                                subject: widget.video.subject,
+                              );
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.link, color: Colors.white),
+                            title: const Text('Copy link', style: TextStyle(color: Colors.white)),
+                            onTap: () {
+                              Get.back();
+                              Clipboard.setData(ClipboardData(text: 'https://telsoworld.com/reel/${widget.video.id}'));
+                              Get.snackbar(
+                                'Link Copied',
+                                'Reel link copied to clipboard!',
+                                backgroundColor: const Color(0xFF1E1E24),
+                                colorText: Colors.white,
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // 2. Media View: Takes available height below stories and 100% full screen width!
+        Expanded(
+          child: GestureDetector(
+            onTap: _onSingleTapVideo,
+            onDoubleTap: _onDoubleTapVideo,
+            child: Stack(
+              fit: StackFit.expand,
+              alignment: Alignment.center,
+              children: [
+                Positioned.fill(
+                  child: widget.video.mediaType == 'photo'
+                      ? Image.network(
+                          widget.video.photoUrl.isNotEmpty
+                              ? widget.video.photoUrl
+                              : widget.video.videoPath,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          errorBuilder: (_, __, ___) =>
+                              _VideoErrorPlaceholder(subject: widget.video.subject),
+                          loadingBuilder: (_, child, prog) => prog == null
+                              ? child
+                              : const Center(
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFFD70F64),
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                        )
+                      : _hasError
+                      ? _VideoErrorPlaceholder(subject: widget.video.subject)
+                      : (_initialized && _controller != null)
+                      ? SizedBox.expand(
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            clipBehavior: Clip.hardEdge,
+                            child: SizedBox(
+                              width: (_controller!.value.size.width > 0)
+                                  ? _controller!.value.size.width
+                                  : 720,
+                              height: (_controller!.value.size.height > 0)
+                                  ? _controller!.value.size.height
+                                  : 1280,
+                              child: VideoPlayer(_controller!),
+                            ),
+                          ),
+                        )
+                      : const ColoredBox(
+                          color: Colors.black,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFFD70F64),
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        ),
+                ),
+
+                // Play icon overlay when paused
+                if (_initialized &&
+                    _controller != null &&
+                    (_isManuallyPaused || !_controller!.value.isPlaying))
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 40,
+                      ),
+                    ),
+                  ),
+
+                // Double tap Heart Animation
+                IgnorePointer(
+                  child: Center(
+                    child: FadeTransition(
+                      opacity: _heartOpacity,
+                      child: ScaleTransition(
+                        scale: _heartScale,
+                        child: Icon(
+                          Icons.favorite_rounded,
+                          color: const Color(0xFFFF2D55).withOpacity(0.95),
+                          size: 96,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Floating audio badge on photo if hasAudio
+                if (widget.video.mediaType == 'photo' && widget.video.hasAudio)
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.65),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white24, width: 0.8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.music_note_rounded, color: Colors.white, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            widget.video.audioTitle.isNotEmpty
+                                ? widget.video.audioTitle
+                                : 'Original audio',
+                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+
+        // 3. Post Footer (Heart, Comment, Share, Bookmark, Mute, Real Likes, Caption)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => _toggleLike(animateHeart: true),
+                    child: Icon(
+                      _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      color: _isLiked ? const Color(0xFFFF2A6D) : Colors.white,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  GestureDetector(
+                    onTap: _openCommentsSheet,
+                    child: const Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  GestureDetector(
+                    onTap: () {
+                      Share.share(
+                        'Watch this trending post on Telso World! 🔥 https://telsoworld.com/reel/${widget.video.id}',
+                        subject: widget.video.subject,
+                      );
+                    },
+                    child: const Icon(
+                      Icons.near_me_outlined,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (widget.video.mediaType != 'photo')
+                    GestureDetector(
+                      onTap: _toggleMute,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: const BoxDecoration(
+                          color: Colors.white12,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 12),
+                  const Icon(
+                    Icons.bookmark_border_rounded,
+                    color: Colors.white,
+                    size: 25,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Real Likes Count
+              Text(
+                '$_likesCount ${_likesCount == 1 ? "like" : "likes"}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 3),
+              // Caption
+              RichText(
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                text: TextSpan(
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  children: [
+                    TextSpan(
+                      text: '${widget.video.username.isNotEmpty ? widget.video.username : widget.video.name} ',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    TextSpan(text: widget.video.subject),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: _openCommentsSheet,
+                child: const Text(
+                  'View all comments',
+                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 🎬 Reels Immersive Full-Screen Page (Reels Tab)
+  Widget _buildReelsImmersivePage() {
     return GestureDetector(
       onTap: _onSingleTapVideo,
       onDoubleTap: _onDoubleTapVideo,
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Video / loading / error ──
-          if (_hasError)
-            _VideoErrorPlaceholder(subject: widget.video.subject)
-          else if (_initialized && _controller != null)
-            Center(
-              child: AspectRatio(
-                aspectRatio: _controller!.value.aspectRatio,
-                child: VideoPlayer(_controller!),
-              ),
-            )
-          else
-            const ColoredBox(
-              color: Colors.black,
-              child: Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFD70F64),
-                  strokeWidth: 2,
-                ),
-              ),
-            ),
+          // ── Video / Photo / loading / error (Covers full screen width & height edge-to-edge) ──
+          Positioned.fill(
+            child: widget.video.mediaType == 'photo'
+                ? Image.network(
+                    widget.video.photoUrl.isNotEmpty
+                        ? widget.video.photoUrl
+                        : widget.video.videoPath,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    errorBuilder: (_, __, ___) =>
+                        _VideoErrorPlaceholder(subject: widget.video.subject),
+                    loadingBuilder: (_, child, prog) => prog == null
+                        ? child
+                        : const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFFD70F64),
+                              strokeWidth: 2,
+                            ),
+                          ),
+                  )
+                : _hasError
+                ? _VideoErrorPlaceholder(subject: widget.video.subject)
+                : (_initialized && _controller != null)
+                ? SizedBox.expand(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: (_controller!.value.size.width > 0)
+                            ? _controller!.value.size.width
+                            : 720,
+                        height: (_controller!.value.size.height > 0)
+                            ? _controller!.value.size.height
+                            : 1280,
+                        child: VideoPlayer(_controller!),
+                      ),
+                    ),
+                  )
+                : const ColoredBox(
+                    color: Colors.black,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFFD70F64),
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+          ),
 
           // ── Play/Pause Icon overlay when video is paused by user ──
-          if (_initialized && _controller != null && (_isManuallyPaused || !_controller!.value.isPlaying))
+          if (_initialized &&
+              _controller != null &&
+              (_isManuallyPaused || !_controller!.value.isPlaying))
             Center(
               child: Container(
                 width: 72,
@@ -983,7 +1465,9 @@ class _VideoPageState extends State<_VideoPage>
           ),
 
           // ── Sound Mute / Unmute button ──
-          if (_initialized)
+          if (_initialized &&
+              _controller != null &&
+              widget.video.mediaType != 'photo')
             Positioned(
               right: 14,
               bottom: 300,
@@ -997,7 +1481,9 @@ class _VideoPageState extends State<_VideoPage>
                     border: Border.all(color: Colors.white24),
                   ),
                   child: Icon(
-                    _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                    _isMuted
+                        ? Icons.volume_off_rounded
+                        : Icons.volume_up_rounded,
                     color: _isMuted ? Colors.white70 : Colors.white,
                     size: 20,
                   ),
@@ -1014,6 +1500,7 @@ class _VideoPageState extends State<_VideoPage>
               likesCount: _likesCount,
               sharesCount: widget.video.sharesCount,
               videoTitle: widget.video.subject,
+              videoId: widget.video.id,
               showFollowButton: !_isSelfVideo,
               onLikeTap: () => _toggleLike(),
               onCommentTap: _openCommentsSheet,
@@ -1029,7 +1516,9 @@ class _VideoPageState extends State<_VideoPage>
           ),
 
           // ── Scrubbable progress bar at the very bottom ──
-          if (_initialized)
+          if (_initialized &&
+              _controller != null &&
+              widget.video.mediaType != 'photo')
             Positioned(
               left: 0,
               right: 0,
@@ -1178,150 +1667,118 @@ class _TopBar extends StatelessWidget {
   final String? referralCode;
   final VoidCallback onAdsTap;
   final bool hasSettingVideo;
+  final VoidCallback? onTitleTap;
 
   const _TopBar({
     this.referralCode,
     required this.onAdsTap,
     required this.hasSettingVideo,
+    this.onTitleTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Brand Logo & Live indicator (Clean, no For You / Following)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  colors: [Color(0xFFFF2A6D), Color(0xFFFF8008)],
-                ).createShader(bounds),
-                child: const Text(
-                  'TELSO WORLD',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
+          // 🌟 Left: App Icon + "Telso World" Branding (Instagram font style)
+          GestureDetector(
+            onTap: onTitleTap,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: Image.asset(
+                    'assets/icons/app_icon.png',
+                    width: 30,
+                    height: 30,
+                    fit: BoxFit.cover,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.45),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white12),
+                const SizedBox(width: 8),
+                const Text(
+                  'Telso World',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF00E676),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'LIVE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
 
-          // Action buttons on right
+          // 💬 Right: Create [+] | Heart [Activity/Notifications] | Direct Message [Messenger]
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 📹 Quick Upload Video Icon Button
+              // ➕ Create Post / Reel [+]
               GestureDetector(
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const ReelUploadScreen()),
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ReelUploadScreen(),
+                    ),
                   );
                 },
                 child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.45),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white12),
+                  padding: const EdgeInsets.all(6),
+                  color: Colors.transparent,
+                  child: const Icon(
+                    Icons.add_box_outlined,
+                    color: Colors.white,
+                    size: 26,
                   ),
-                  child: const Icon(Icons.video_call_rounded, color: Colors.white, size: 18),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
 
-              // Ads Video button
+              // Point 10: Like button / Heart icon on top opens Activity / Notifications screen
               GestureDetector(
-                onTap: onAdsTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFD70F64), Color(0xFFFF2A6D)],
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const NotificationsScreen(),
                     ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFD70F64).withOpacity(0.4),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.campaign_rounded, color: Colors.white, size: 14),
-                      SizedBox(width: 4),
-                      Text(
-                        'Ads',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  color: Colors.transparent,
+                  child: const Icon(
+                    Icons.favorite_border_rounded,
+                    color: Colors.white,
+                    size: 26,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
 
-              // Search Button (Switches to Discovery tab)
+              // Direct Messenger
               GestureDetector(
                 onTap: () {
                   try {
-                    Get.find<MainNavController>().changeTab(1);
-                  } catch (_) {}
+                    Get.find<MainNavController>().changeTab(2);
+                  } catch (_) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const InboxScreen(),
+                      ),
+                    );
+                  }
                 },
                 child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.45),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white12),
+                  padding: const EdgeInsets.all(6),
+                  color: Colors.transparent,
+                  child: const Icon(
+                    Icons.near_me_outlined,
+                    color: Colors.white,
+                    size: 26,
                   ),
-                  child: const Icon(Icons.search_rounded, color: Colors.white, size: 16),
                 ),
               ),
             ],
@@ -1340,6 +1797,7 @@ class _RightActions extends StatefulWidget {
   final int likesCount;
   final int sharesCount;
   final String videoTitle;
+  final int videoId;
   final bool showFollowButton;
   final VoidCallback onLikeTap;
   final VoidCallback onCommentTap;
@@ -1349,6 +1807,7 @@ class _RightActions extends StatefulWidget {
     required this.likesCount,
     required this.sharesCount,
     this.videoTitle = 'Telso Reel',
+    this.videoId = 0,
     this.showFollowButton = true,
     required this.onLikeTap,
     required this.onCommentTap,
@@ -1390,8 +1849,11 @@ class _RightActionsState extends State<_RightActions>
   }
 
   void _shareVideo() {
+    final link = widget.videoId > 0
+        ? 'https://telsoworld.com/reel/${widget.videoId}'
+        : 'https://telsoworld.com';
     Share.share(
-      'Watch this trending reel on Telso World! 🔥 https://telsoworld.com',
+      'Watch this trending reel on Telso World! 🔥 $link',
       subject: widget.videoTitle,
     );
   }
@@ -1444,19 +1906,18 @@ class _RightActionsState extends State<_RightActions>
         GestureDetector(
           onTap: widget.onCommentTap,
           child: const _ActionButton(
-            icon: Icons.chat_bubble_rounded,
+            icon: Icons.chat_bubble_outline_rounded,
             label: 'Comment',
           ),
         ),
         const SizedBox(height: 18),
 
-        // Share
+        // Share (Authentic Instagram Paper Plane)
         GestureDetector(
           onTap: _shareVideo,
           child: _ActionButton(
-            icon: Icons.reply_rounded,
-            label: _fmt(widget.sharesCount),
-            flipHorizontal: true,
+            icon: Icons.near_me_outlined,
+            label: widget.sharesCount > 0 ? _fmt(widget.sharesCount) : 'Share',
           ),
         ),
         const SizedBox(height: 18),
@@ -1867,6 +2328,89 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
     }
   }
 
+  Future<void> _editCommentDialog(CommentItem comment) async {
+    final textController = TextEditingController(text: comment.comment);
+    final editedText = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        title: const Text('Edit Comment', style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Edit your comment...',
+            hintStyle: TextStyle(color: Colors.white38),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFD70F64))),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFD70F64))),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(textController.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD70F64),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (editedText == null || editedText.isEmpty || editedText == comment.comment) return;
+
+    try {
+      final token = await SessionTokenStore.getToken();
+      final response = await http
+          .put(
+            Uri.parse('${ApiEndpoints.baseUrl}/comments/${comment.id}'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'comment': editedText}),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        setState(() {
+          _comments = _comments
+              .map((c) => c.id == comment.id ? c.copyWith(comment: editedText) : c)
+              .toList();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Comment updated! ✨'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        throw Exception('Failed to update comment (${response.statusCode})');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmDeleteComment(CommentItem comment) async {
     if (_deletingCommentIds.contains(comment.id)) return;
     final shouldDelete = await showDialog<bool>(
@@ -2228,20 +2772,35 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
               ),
             ],
           ),
-          trailing: _deletingCommentIds.contains(item.id)
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFFD70F64),
-                  ),
-                )
-              : IconButton(
-                  onPressed: () => _confirmDeleteComment(item),
-                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54),
-                  tooltip: 'Delete comment',
-                ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: () => _editCommentDialog(item),
+                icon: const Icon(Icons.edit_outlined, color: Colors.white54, size: 18),
+                tooltip: 'Edit comment',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              _deletingCommentIds.contains(item.id)
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFD70F64),
+                      ),
+                    )
+                  : IconButton(
+                      onPressed: () => _confirmDeleteComment(item),
+                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54, size: 18),
+                      tooltip: 'Delete comment',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+            ],
+          ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         );
       },
@@ -2570,7 +3129,9 @@ class _BottomInfo extends StatelessWidget {
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  'Original Audio • @$creatorName',
+                  video.audioTitle.isNotEmpty
+                      ? video.audioTitle
+                      : 'Original Audio • @$creatorName',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

@@ -57,6 +57,21 @@ class ApiEndpoints {
     return '$baseUrl$cleanPath';
   }
 
+  /// Normalizes any media path or absolute URL to secure HTTPS URL
+  static String mediaUrl(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) return '';
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      if (trimmed.startsWith('http://telsoworld.com')) {
+        return trimmed.replaceFirst('http://telsoworld.com', 'https://telsoworld.com');
+      }
+      return trimmed;
+    }
+    final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    final scheme = (useProductionServer || host == productionDomain) ? 'https' : 'http';
+    return '$scheme://$host$cleanPath';
+  }
+
   // Auth
   static const String login = '/reporter/login';
   static const String register = '/reporter/register';
@@ -75,6 +90,19 @@ class ApiEndpoints {
   static const String comments = '/comments';
   static const String addComment = '/comments/add';
   static const String likeComment = '/comments/like';
+
+  // Stories (24h)
+  static const String stories = '/reporter/stories';
+
+  // Direct Messages & Chat
+  static const String messagesInbox = '/reporter/messages/inbox';
+  static const String sendMessage = '/reporter/messages/send';
+  static const String messagesChat = '/reporter/messages/chat';
+  static const String respondRequest = '/reporter/messages/respond';
+
+  // Block
+  static const String blockUser = '/reporter/block';
+  static const String blockedList = '/reporter/blocked';
 
   // Wallet & Referral
   static const String wallet = '/reporter/wallet';

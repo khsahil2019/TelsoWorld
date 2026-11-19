@@ -196,11 +196,12 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
                                 shape: BoxShape.circle,
                                 color: Color(0xFF0F0F16),
                               ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.play_arrow_rounded,
-                                  size: 54,
-                                  color: Colors.white,
+                              child: ClipOval(
+                                child: Image.asset(
+                                  'assets/icons/app_icon.png',
+                                  width: 90,
+                                  height: 90,
+                                  fit: BoxFit.cover,
                                 ),
                               ),
                             ),
