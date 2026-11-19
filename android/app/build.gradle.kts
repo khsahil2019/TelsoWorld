@@ -14,7 +14,17 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-android {
+android {Short description
+ 
+*
+Users can expand to view your full description.
+ 
+
+0 / 80
+Text is 0 characters out of 80
+Full description
+ 
+*
     namespace = "com.telsoworld.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
