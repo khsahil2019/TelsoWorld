@@ -32,9 +32,13 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 app.use(express.static(path.join(__dirname, 'public', 'web')));
 
-// 📜 Privacy Policy & Account Deletion routes for Google Play Store compliance
+// 📜 Privacy Policy, Child Safety Standards & Account Deletion routes for Google Play Store compliance
 app.get(['/privacy-policy', '/privacy', '/privacy.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'web', 'privacy-policy.html'));
+});
+
+app.get(['/child-safety', '/child-safety-standards', '/safety', '/child-safety.html'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'web', 'child-safety.html'));
 });
 
 app.get(['/delete-account', '/account-deletion'], (req, res) => {
