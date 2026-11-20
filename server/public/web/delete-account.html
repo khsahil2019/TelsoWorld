@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account & Data Deletion - Telso World</title>
+  <meta name="description" content="Request account and personal data deletion for Telso World (com.telsoworld.app).">
+  <style>
+    :root {
+      --bg: #0b0b12;
+      --card: #141420;
+      --border: #232336;
+      --primary: #ff2a6d;
+      --text: #f0f0f8;
+      --text-muted: #a0a0b8;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      padding: 30px 20px;
+    }
+    .box {
+      max-width: 650px;
+      margin: 40px auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px 28px;
+    }
+    h1 {
+      font-size: 26px;
+      margin-bottom: 12px;
+      color: #fff;
+    }
+    p {
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      font-size: 15px;
+    }
+    ol {
+      margin-left: 20px;
+      margin-bottom: 20px;
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    input, textarea {
+      width: 100%;
+      background: #0b0b12;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      color: #fff;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+    button {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover {
+      background: #d70f64;
+    }
+    .notice {
+      background: rgba(255, 42, 109, 0.1);
+      border-left: 3px solid var(--primary);
+      padding: 12px;
+      font-size: 13px;
+      color: #ffccd7;
+      margin-top: 20px;
+      border-radius: 4px;
+    }
+    a { color: var(--primary); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Delete Your Telso World Account</h1>
+    <p>
+      In accordance with Google Play's User Data Policy, users of <strong>Telso World</strong> (<code>com.telsoworld.app</code>) can request the permanent deletion of their account and all associated personal data.
+    </p>
+
+    <h2 style="font-size: 18px; margin: 20px 0 10px 0; color: #fff;">What data will be deleted?</h2>
+    <p>
+      Upon processing your deletion request, the following data will be permanently wiped:
+    </p>
+    <ul>
+      <li>User profile (Name, username, email, phone number, bio, avatar)</li>
+      <li>All published video reels, photos, captions, and comments</li>
+      <li>All uploaded 24-hour stories and highlights</li>
+      <li>Direct chat message history</li>
+      <li>Followers and following connections</li>
+    </ul>
+
+    <h2 style="font-size: 18px; margin: 24px 0 10px 0; color: #fff;">Online Deletion Request Form</h2>
+    <form onsubmit="handleDelete(event)">
+      <div class="form-group">
+        <label for="email">Registered Email or Username *</label>
+        <input type="text" id="email" required placeholder="e.g. sahil@gmail.com or username">
+      </div>
+      <div class="form-group">
+        <label for="reason">Reason for leaving (Optional)</label>
+        <textarea id="reason" rows="3" placeholder="Tell us why you want to delete your account..."></textarea>
+      </div>
+      <button type="submit">Submit Deletion Request</button>
+    </form>
+
+    <div id="status" style="display: none; margin-top: 16px; padding: 12px; background: #1b382b; color: #4ade80; border-radius: 8px; font-size: 14px;">
+      ✅ Your deletion request has been received. Our team will verify and permanently delete your account within 48 to 72 hours.
+    </div>
+
+    <div class="notice">
+      You can also delete your account instantly inside the Telso World app: <strong>Profile > Settings > Account > Delete Account</strong>, or email us directly at <a href="mailto:support@telsoworld.com">support@telsoworld.com</a>.
+    </div>
+
+    <p style="text-align: center; margin-top: 24px; font-size: 13px;">
+      <a href="/privacy-policy">← Back to Privacy Policy</a>
+    </p>
+  </div>
+
+  <script>
+    function handleDelete(e) {
+      e.preventDefault();
+      document.getElementById('status').style.display = 'block';
+      e.target.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
