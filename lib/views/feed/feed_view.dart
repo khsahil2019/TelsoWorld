@@ -1030,19 +1030,27 @@ class _VideoPageState extends State<_VideoPage>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 17,
-                backgroundColor: const Color(0xFF23232E),
-                backgroundImage: widget.video.userProfileImage.isNotEmpty
-                    ? NetworkImage(widget.video.userProfileImage)
-                    : null,
-                child: widget.video.userProfileImage.isEmpty
-                    ? Text(
-                        (widget.video.username.isNotEmpty ? widget.video.username : widget.video.name)[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      )
-                    : null,
-              ),
+              Obx(() {
+                final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+                final myAvatar = storage?.profileImage.value ?? '';
+                final effectiveAvatar = (_isSelfVideo && myAvatar.isNotEmpty)
+                    ? ApiEndpoints.mediaUrl(myAvatar)
+                    : widget.video.userProfileImage;
+
+                return CircleAvatar(
+                  radius: 17,
+                  backgroundColor: const Color(0xFF23232E),
+                  backgroundImage: effectiveAvatar.isNotEmpty
+                      ? NetworkImage(effectiveAvatar)
+                      : null,
+                  child: effectiveAvatar.isEmpty
+                      ? Text(
+                          (widget.video.username.isNotEmpty ? widget.video.username : widget.video.name)[0].toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        )
+                      : null,
+                );
+              }),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1545,17 +1553,25 @@ class _VideoPageState extends State<_VideoPage>
           Positioned(
             right: 10,
             bottom: 28,
-            child: _RightActions(
-              isLiked: _isLiked,
-              likesCount: _likesCount,
-              sharesCount: widget.video.sharesCount,
-              videoTitle: widget.video.subject,
-              videoId: widget.video.id,
-              profileImage: widget.video.userProfileImage,
-              showFollowButton: !_isSelfVideo,
-              onLikeTap: () => _toggleLike(),
-              onCommentTap: _openCommentsSheet,
-            ),
+            child: Obx(() {
+              final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+              final myAvatar = storage?.profileImage.value ?? '';
+              final effectiveAvatar = (_isSelfVideo && myAvatar.isNotEmpty)
+                  ? ApiEndpoints.mediaUrl(myAvatar)
+                  : widget.video.userProfileImage;
+
+              return _RightActions(
+                isLiked: _isLiked,
+                likesCount: _likesCount,
+                sharesCount: widget.video.sharesCount,
+                videoTitle: widget.video.subject,
+                videoId: widget.video.id,
+                profileImage: effectiveAvatar,
+                showFollowButton: !_isSelfVideo,
+                onLikeTap: () => _toggleLike(),
+                onCommentTap: _openCommentsSheet,
+              );
+            }),
           ),
 
           // ── Bottom info (caption, creator & audio) ──

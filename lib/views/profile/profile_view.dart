@@ -62,17 +62,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _openEditProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute<bool>(
+    final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+    final activeAvatar = storage?.profileImage.value.isNotEmpty == true
+        ? storage!.profileImage.value
+        : _profileImageUrl;
+
+    Navigator.of(context).push<dynamic>(
+      MaterialPageRoute<dynamic>(
         builder: (_) => EditProfileScreen(
           currentName: _userName,
           currentUsername: _userHandle.replaceAll('@', ''),
           currentBio: _bio,
-          currentAvatar: _profileImageUrl,
+          currentAvatar: activeAvatar,
         ),
       ),
     ).then((updated) {
-      if (updated == true) {
+      if (updated != null) {
+        if (updated is String && updated.isNotEmpty) {
+          setState(() {
+            _profileImageUrl = updated;
+          });
+        }
         _loadProfileData();
       }
     });
@@ -471,21 +481,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                       padding: const EdgeInsets.all(3),
-                      child: Container(
-                        width: 86,
-                        height: 86,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF1E1E24),
-                        ),
-                        child: ClipOval(
-                          child: _profileImageUrl.isNotEmpty
-                              ? Image.network(
-                                  ApiEndpoints.mediaUrl(_profileImageUrl),
-                                  width: 86,
-                                  height: 86,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Center(
+                      child: Obx(() {
+                        final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+                        final effectiveImg = storage?.profileImage.value.isNotEmpty == true
+                            ? storage!.profileImage.value
+                            : _profileImageUrl;
+
+                        return Container(
+                          width: 86,
+                          height: 86,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFF1E1E24),
+                          ),
+                          child: ClipOval(
+                            child: effectiveImg.isNotEmpty
+                                ? Image.network(
+                                    ApiEndpoints.mediaUrl(effectiveImg),
+                                    width: 86,
+                                    height: 86,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Center(
+                                      child: Text(
+                                        avatarLetter,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : Center(
                                     child: Text(
                                       avatarLetter,
                                       style: const TextStyle(
@@ -495,19 +522,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     ),
                                   ),
-                                )
-                              : Center(
-                                  child: Text(
-                                    avatarLetter,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 36,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                      ),
+                          ),
+                        );
+                      }),
                     ),
                     Container(
                       padding: const EdgeInsets.all(5),
@@ -975,27 +992,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primaryPink, Color(0xFFFF6584)],
-                          ),
-                          border: Border.all(color: Colors.white24, width: 1.5),
-                        ),
-                        child: Center(
-                          child: Text(
-                            avatarLetter,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                      Obx(() {
+                        final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+                        final effectiveImg = storage?.profileImage.value.isNotEmpty == true
+                            ? storage!.profileImage.value
+                            : _profileImageUrl;
+
+                        return Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const LinearGradient(
+                              colors: [AppColors.primaryPink, Color(0xFFFF6584)],
                             ),
+                            border: Border.all(color: Colors.white24, width: 1.5),
                           ),
-                        ),
-                      ),
+                          child: ClipOval(
+                            child: effectiveImg.isNotEmpty
+                                ? Image.network(
+                                    ApiEndpoints.mediaUrl(effectiveImg),
+                                    fit: BoxFit.cover,
+                                    width: 48,
+                                    height: 48,
+                                    errorBuilder: (_, __, ___) => Center(
+                                      child: Text(
+                                        avatarLetter,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : Center(
+                                    child: Text(
+                                      avatarLetter,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        );
+                      }),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(

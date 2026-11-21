@@ -78,9 +78,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isSaving = true);
     try {
       final token = await SessionTokenStore.getToken();
-      final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/profile');
+      final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+      final currentUid = storage?.getUserId() ?? 0;
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.profile}');
 
-      final request = http.MultipartRequest('PUT', uri);
+      final request = http.MultipartRequest('POST', uri);
       request.headers.addAll({
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
@@ -88,9 +90,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       request.fields['name'] = name;
       request.fields['username'] = username;
       request.fields['bio'] = bio;
+      if (currentUid > 0) {
+        request.fields['user_id'] = currentUid.toString();
+      }
 
       if (_pickedImage != null) {
         request.files.add(await http.MultipartFile.fromPath('avatar', _pickedImage!.path));
+        request.files.add(await http.MultipartFile.fromPath('profile_image', _pickedImage!.path));
       }
 
       final streamed = await request.send().timeout(const Duration(seconds: 30));
@@ -98,24 +104,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final data = jsonDecode(res.body);
-        final profileImage = data['data']?['profile_image']?.toString() ?? '';
+        final rawProfileImage = data['data']?['profile_image']?.toString() ?? '';
+        final cleanProfileImage = rawProfileImage.isNotEmpty ? ApiEndpoints.mediaUrl(rawProfileImage) : '';
 
-        if (Get.isRegistered<StorageService>()) {
-          final storage = Get.find<StorageService>();
-          if (profileImage.isNotEmpty) {
-            storage.setProfileImage(profileImage);
-          }
+        if (storage != null && cleanProfileImage.isNotEmpty) {
+          await storage.setProfileImage(cleanProfileImage);
         }
 
         Get.snackbar(
           'Profile Updated! ✨',
-          'Your profile information has been saved successfully.',
+          'Your profile picture and information have been saved.',
           backgroundColor: const Color(0xFF161622),
           colorText: const Color(0xFF10B981),
           snackPosition: SnackPosition.TOP,
         );
 
-        if (mounted) Navigator.of(context).pop(true);
+        if (mounted) Navigator.of(context).pop(cleanProfileImage.isNotEmpty ? cleanProfileImage : true);
       } else {
         Get.snackbar('Error', 'Failed to update profile (${res.statusCode})',
             backgroundColor: const Color(0xFF1E1E24), colorText: Colors.redAccent);
@@ -177,7 +181,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           backgroundColor: const Color(0xFF1E1E24),
                           backgroundImage: _pickedImage != null
                               ? FileImage(_pickedImage!) as ImageProvider
-                              : (widget.currentAvatar.isNotEmpty ? NetworkImage(widget.currentAvatar) : null),
+                              : (widget.currentAvatar.isNotEmpty
+                                  ? NetworkImage(ApiEndpoints.mediaUrl(widget.currentAvatar))
+                                  : null),
                           child: (_pickedImage == null && widget.currentAvatar.isEmpty)
                               ? const Icon(Icons.person, color: Colors.white54, size: 48)
                               : null,

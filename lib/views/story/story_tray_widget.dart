@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
 import 'package:telsoworld/core/constants/api_endpoints.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
+import 'package:telsoworld/core/services/storage_service.dart';
 import 'package:telsoworld/models/story_model.dart';
 import 'package:telsoworld/views/story/story_viewer_screen.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
@@ -233,21 +234,37 @@ class _StoryTrayWidgetState extends State<StoryTrayWidget> {
                 children: [
                   Stack(
                     children: [
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white24, width: 1.5),
-                          color: const Color(0xFF22222E),
-                        ),
-                        child: _isPostingStory
-                            ? const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFD70F64)),
-                              )
-                            : const Icon(Icons.person, color: Colors.white70, size: 30),
-                      ),
+                      Obx(() {
+                        final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+                        final myAvatar = storage?.profileImage.value ?? '';
+
+                        return Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white24, width: 1.5),
+                            color: const Color(0xFF22222E),
+                          ),
+                          child: ClipOval(
+                            child: _isPostingStory
+                                ? const Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFD70F64)),
+                                  )
+                                : (myAvatar.isNotEmpty
+                                    ? Image.network(
+                                        ApiEndpoints.mediaUrl(myAvatar),
+                                        fit: BoxFit.cover,
+                                        width: 60,
+                                        height: 60,
+                                        errorBuilder: (_, __, ___) =>
+                                            const Icon(Icons.person, color: Colors.white70, size: 30),
+                                      )
+                                    : const Icon(Icons.person, color: Colors.white70, size: 30)),
+                          ),
+                        );
+                      }),
                       Positioned(
                         bottom: 0,
                         right: 0,

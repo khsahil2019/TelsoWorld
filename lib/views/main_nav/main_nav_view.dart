@@ -42,7 +42,7 @@ class _MainNavViewState extends State<MainNavView> {
     try {
       final token = await SessionTokenStore.getToken();
       if (token.isEmpty) return;
-      final uri = Uri.parse('${ApiEndpoints.baseUrl}/reporter/my-profile');
+      final uri = Uri.parse('${ApiEndpoints.baseUrl}${ApiEndpoints.profile}');
       final res = await http
           .get(
             uri,
@@ -55,12 +55,13 @@ class _MainNavViewState extends State<MainNavView> {
 
       if (res.statusCode == 200) {
         final j = jsonDecode(res.body);
-        final img = j['data']?['profile_image']?.toString() ?? '';
-        if (img.isNotEmpty) {
+        final rawImg = j['data']?['profile_image']?.toString() ?? '';
+        if (rawImg.isNotEmpty) {
+          final cleanImg = ApiEndpoints.mediaUrl(rawImg);
           final storage = Get.isRegistered<StorageService>()
               ? Get.find<StorageService>()
               : null;
-          storage?.setProfileImage(img);
+          storage?.setProfileImage(cleanImg);
         }
       }
     } catch (_) {}

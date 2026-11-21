@@ -273,12 +273,21 @@ router.post('/follow/:id', authOptional, async (req, res) => {
   });
 });
 
+const avatarUpload = upload.fields([
+  { name: 'avatar', maxCount: 1 },
+  { name: 'profile_image', maxCount: 1 },
+  { name: 'image', maxCount: 1 },
+  { name: 'file', maxCount: 1 },
+]);
+
 /**
  * ✏️ PUT /api/reporter/profile & POST /api/reporter/profile
  * Updates creator profile info (name, bio, whatsapp, email, username, profile_image)
  */
 const handleUpdateProfile = async (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.user_id || 1);
+  const userId = req.user
+    ? req.user.id
+    : (parseInt(req.body.user_id, 10) || (await db.getUsers())[0]?.id || 1);
   const existing = await db.findUserById(userId);
   if (!existing) {
     return res.status(404).json({ status: false, message: 'User not found' });
@@ -291,13 +300,31 @@ const handleUpdateProfile = async (req, res) => {
   if (req.body.whatsapp) updates.whatsapp = req.body.whatsapp.trim();
   if (req.body.username) updates.username = req.body.username.trim().toLowerCase();
   if (req.body.mobile_no) updates.mobile_no = req.body.mobile_no.trim();
-  if (req.body.profile_image) updates.profile_image = req.body.profile_image.trim();
+  if (req.body.profile_image && typeof req.body.profile_image === 'string') {
+    updates.profile_image = toRelativeMediaPath(req.body.profile_image.trim());
+  }
 
-  if (req.file) {
-    updates.profile_image = `/uploads/thumbnails/${req.file.filename}`;
+  const file = req.file || (req.files && (
+    (req.files['avatar'] && req.files['avatar'][0]) ||
+    (req.files['profile_image'] && req.files['profile_image'][0]) ||
+    (req.files['image'] && req.files['image'][0]) ||
+    (req.files['file'] && req.files['file'][0])
+  ));
+
+  if (file) {
+    updates.profile_image = `/uploads/thumbnails/${file.filename}`;
   }
 
   const updated = await db.updateUser(userId, updates);
+
+  if (updates.profile_image) {
+    try {
+      await db.pool.query('UPDATE stories SET profile_image = $1 WHERE user_id = $2', [updates.profile_image, userId]);
+      await db.pool.query('UPDATE comments SET profile_image = $1 WHERE user_id = $2', [updates.profile_image, userId]);
+    } catch (e) {
+      console.warn('Failed to cascade profile image update:', e.message);
+    }
+  }
 
   return res.status(200).json({
     status: true,
@@ -309,8 +336,47 @@ const handleUpdateProfile = async (req, res) => {
   });
 };
 
-router.put('/profile', authOptional, upload.single('avatar'), handleUpdateProfile);
-router.post('/profile', authOptional, upload.single('avatar'), handleUpdateProfile);
+router.put('/profile', authOptional, avatarUpload, handleUpdateProfile);
+router.post('/profile', authOptional, avatarUpload, handleUpdateProfile);
+router.get('/my-profile', authOptional, async (req, res) => {
+  const userId = req.user ? req.user.id : (req.query.user_id || 8);
+  const user = (await db.findUserById(userId)) || (await db.getUsers())[0];
+  if (!user) {
+    return res.status(404).json({ status: false, message: 'No user profile found' });
+  }
+  const stats = await db.getCreatorStats(user.id);
+  const wallet = await db.getWallet(user.id);
+
+  return res.status(200).json({
+    status: true,
+    data: {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      email: user.email,
+      mobile_no: user.mobile_no,
+      whatsapp: user.whatsapp || user.mobile_no,
+      dob: user.dob,
+      bio: user.bio || 'Official Creator on Telso World 🎵 Singer, Music Producer & Live Performer.',
+      profile_image: normalizeMediaUrl(req, user.profile_image || ''),
+      verified: true,
+      followers_count: stats.followers_count || 0,
+      following_count: stats.following_count || 0,
+      subscribers_count: stats.followers_count || 0,
+      total_videos: stats.total_videos || 0,
+      total_likes: stats.total_likes || 0,
+      total_views: stats.total_views || 0,
+      approved_count: stats.approved_count || 0,
+      pending_count: stats.pending_count || 0,
+      wallet_balance: wallet.balance,
+      referral_code: user.referral_code || 'TELSO2026',
+      videos: (stats.videos || []).map(v => formatVideoResponse(req, v)),
+      liked_videos: (stats.liked_videos || []).map(v => formatVideoResponse(req, v)),
+    },
+  });
+});
+router.put('/my-profile', authOptional, avatarUpload, handleUpdateProfile);
+router.post('/my-profile', authOptional, avatarUpload, handleUpdateProfile);
 
 /**
  * 👥 GET /api/reporter/followers/:id
