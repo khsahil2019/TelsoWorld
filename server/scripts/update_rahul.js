@@ -7,19 +7,19 @@ async function updateRahul() {
 
   console.log('Updating user 8 (rahul)...');
   await pool.query(
-    "UPDATE users SET profile_image = '/uploads/videos/1795029068207-763637699.jpg' WHERE id = 8"
+    "UPDATE users SET profile_image = '/uploads/videos/1795249573891-137765854.jpg' WHERE id = 8"
   );
 
   console.log('Updating video 33...');
   await pool.query(
-    "UPDATE videos SET thumbnail_url = video_url, image = video_url, photo_url = video_url, media_type = 'photo' WHERE id = 33"
+    "UPDATE videos SET thumbnail_url = '/uploads/videos/1795249573891-137765854.jpg', image = '/uploads/videos/1795249573891-137765854.jpg', photo_url = '/uploads/videos/1795249573891-137765854.jpg', media_type = 'photo' WHERE id = 33"
   );
 
   console.log('Refreshing stories for user 8...');
   await pool.query('DELETE FROM stories WHERE user_id = 8');
   await pool.query(
     `INSERT INTO stories (user_id, username, name, profile_image, media_url, media_type, caption, views_count, viewed_by, created_at, expires_at)
-     VALUES (8, 'rahul', 'rahul', '/uploads/videos/1795029068207-763637699.jpg', '/uploads/videos/1795249573891-137765854.jpg', 'image', 'Rahul live performance ✨', 1, '[]'::jsonb, NOW(), NOW() + INTERVAL '24 hours')`
+     VALUES (8, 'rahul', 'rahul', '/uploads/videos/1795249573891-137765854.jpg', '/uploads/videos/1795249573891-137765854.jpg', 'image', 'Rahul live performance ✨', 1, '[]'::jsonb, NOW(), NOW() + INTERVAL '24 hours')`
   );
 
   const u = await pool.query('SELECT id, username, name, profile_image FROM users WHERE id = 8');

@@ -60,17 +60,28 @@ function formatVideoResponse(req, v) {
 // Multer storage for uploaded video & thumbnail files
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    let destDir = path.join(__dirname, '..', 'uploads', 'videos');
-    if (file.fieldname === 'thumbnail' || file.mimetype.startsWith('image/')) {
-      destDir = path.join(__dirname, '..', 'uploads', 'thumbnails');
-    }
+    const isImage = file.fieldname === 'thumbnail' ||
+      file.fieldname === 'avatar' ||
+      file.fieldname === 'profile_image' ||
+      file.fieldname === 'image' ||
+      (file.mimetype && file.mimetype.startsWith('image/')) ||
+      /\.(jpg|jpeg|png|webp|gif)$/i.test(file.originalname);
+
+    let destDir = path.join(__dirname, '..', 'uploads', isImage ? 'thumbnails' : 'videos');
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
     }
     cb(null, destDir);
   },
   filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname) || (file.fieldname === 'video' ? '.mp4' : '.jpg');
+    const isImage = file.fieldname === 'thumbnail' ||
+      file.fieldname === 'avatar' ||
+      file.fieldname === 'profile_image' ||
+      file.fieldname === 'image' ||
+      (file.mimetype && file.mimetype.startsWith('image/')) ||
+      /\.(jpg|jpeg|png|webp|gif)$/i.test(file.originalname);
+    const defaultExt = isImage ? '.jpg' : '.mp4';
+    const ext = path.extname(file.originalname) || defaultExt;
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
     cb(null, unique);
   },
@@ -312,7 +323,8 @@ const handleUpdateProfile = async (req, res) => {
   ));
 
   if (file) {
-    updates.profile_image = `/uploads/thumbnails/${file.filename}`;
+    const folder = (file.destination && file.destination.includes('thumbnails')) ? 'thumbnails' : 'videos';
+    updates.profile_image = `/uploads/${folder}/${file.filename}`;
   }
 
   const updated = await db.updateUser(userId, updates);

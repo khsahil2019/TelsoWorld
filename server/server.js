@@ -27,6 +27,23 @@ app.get(['/admin', '/admin/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin', 'index.html'));
 });
 
+// Smart static resolver that checks thumbnails and videos mutually so no media returns 404
+app.get('/uploads/thumbnails/:file', (req, res, next) => {
+  const thumbPath = path.join(__dirname, 'uploads', 'thumbnails', req.params.file);
+  if (fs.existsSync(thumbPath)) return res.sendFile(thumbPath);
+  const videoPath = path.join(__dirname, 'uploads', 'videos', req.params.file);
+  if (fs.existsSync(videoPath)) return res.sendFile(videoPath);
+  next();
+});
+
+app.get('/uploads/videos/:file', (req, res, next) => {
+  const videoPath = path.join(__dirname, 'uploads', 'videos', req.params.file);
+  if (fs.existsSync(videoPath)) return res.sendFile(videoPath);
+  const thumbPath = path.join(__dirname, 'uploads', 'thumbnails', req.params.file);
+  if (fs.existsSync(thumbPath)) return res.sendFile(thumbPath);
+  next();
+});
+
 // Static file servers for uploads, admin console & YouTube-style web platform
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));

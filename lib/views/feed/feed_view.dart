@@ -105,30 +105,31 @@ class VideoItem {
 
   factory VideoItem.fromJson(Map<String, dynamic> json) {
     final rawType = json['media_type']?.toString().toLowerCase().trim() ?? '';
-    final rawVideoUrl = (json['video_url'] ??
-        json['video_path'] ??
-        json['url'] ??
-        '').toString().trim();
-    final rawPhotoUrl = (json['photo_url'] ??
-        json['image'] ??
-        json['thumbnail_url'] ??
-        '').toString().trim();
+    final rawVideoUrl =
+        (json['video_url'] ?? json['video_path'] ?? json['url'] ?? '')
+            .toString()
+            .trim();
+    final rawPhotoUrl =
+        (json['photo_url'] ?? json['image'] ?? json['thumbnail_url'] ?? '')
+            .toString()
+            .trim();
 
-    final isExplicitVideo = rawType == 'video' ||
+    final isExplicitVideo =
+        rawType == 'video' ||
         rawVideoUrl.toLowerCase().endsWith('.mp4') ||
         rawVideoUrl.toLowerCase().endsWith('.mov') ||
         rawVideoUrl.toLowerCase().endsWith('.m4v') ||
         rawVideoUrl.toLowerCase().endsWith('.webm') ||
         rawVideoUrl.toLowerCase().endsWith('.mkv');
 
-    final isPhoto = rawType == 'photo' ||
-        (!isExplicitVideo && (
-            rawVideoUrl.toLowerCase().endsWith('.jpg') ||
-            rawVideoUrl.toLowerCase().endsWith('.png') ||
-            rawVideoUrl.toLowerCase().endsWith('.jpeg') ||
-            rawVideoUrl.toLowerCase().endsWith('.webp') ||
-            rawVideoUrl.toLowerCase().endsWith('.gif')
-        ));
+    final isPhoto =
+        rawType == 'photo' ||
+        (!isExplicitVideo &&
+            (rawVideoUrl.toLowerCase().endsWith('.jpg') ||
+                rawVideoUrl.toLowerCase().endsWith('.png') ||
+                rawVideoUrl.toLowerCase().endsWith('.jpeg') ||
+                rawVideoUrl.toLowerCase().endsWith('.webp') ||
+                rawVideoUrl.toLowerCase().endsWith('.gif')));
 
     String photo = '';
     if (rawPhotoUrl.isNotEmpty) {
@@ -137,7 +138,10 @@ class VideoItem {
       photo = _normalizeVideoUrl(rawVideoUrl);
     }
 
-    final rawAvatar = (json['user_profile_image'] ?? json['profile_image'] ?? '').toString().trim();
+    final rawAvatar =
+        (json['user_profile_image'] ?? json['profile_image'] ?? '')
+            .toString()
+            .trim();
 
     return VideoItem(
       id: json['id'] as int? ?? 0,
@@ -145,7 +149,9 @@ class VideoItem {
       username: json['username']?.toString() ?? '',
       subject: json['subject']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Unknown',
-      userProfileImage: rawAvatar.isNotEmpty ? _normalizeVideoUrl(rawAvatar) : '',
+      userProfileImage: rawAvatar.isNotEmpty
+          ? _normalizeVideoUrl(rawAvatar)
+          : '',
       videoPath: _normalizeVideoUrl(rawVideoUrl),
       photoUrl: photo,
       mediaType: isPhoto ? 'photo' : 'video',
@@ -219,11 +225,7 @@ class CommentItem {
     createdAt: json['created_at']?.toString() ?? '',
   );
 
-  CommentItem copyWith({
-    String? comment,
-    int? likes,
-    bool? isLiked,
-  }) {
+  CommentItem copyWith({String? comment, int? likes, bool? isLiked}) {
     return CommentItem(
       id: id,
       comment: comment ?? this.comment,
@@ -243,11 +245,7 @@ class CommentItem {
 // ─────────────────────────────────────────
 class FeedScreen extends StatefulWidget {
   /// When false (e.g. another bottom tab is selected), feed videos pause.
-  const FeedScreen({
-    super.key,
-    this.visible = true,
-    this.isReelsOnly = false,
-  });
+  const FeedScreen({super.key, this.visible = true, this.isReelsOnly = false});
 
   final bool visible;
   final bool isReelsOnly;
@@ -256,14 +254,16 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBindingObserver {
+class _FeedScreenState extends State<FeedScreen>
+    with RouteAware, WidgetsBindingObserver {
   final Logger _logger = Logger();
 
   bool _routeCovered = false;
   bool _routeObserverSubscribed = false;
   bool _appInBackground = false;
 
-  bool get _playbackActive => widget.visible && !_routeCovered && !_appInBackground;
+  bool get _playbackActive =>
+      widget.visible && !_routeCovered && !_appInBackground;
 
   List<VideoItem> get _displayVideos {
     return _videos;
@@ -460,30 +460,30 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBinding
         body: _isLoading
             ? const _LoadingView()
             : _error != null
-                ? _ErrorView(message: _error!, onRetry: _fetchDashboard)
-                : videos.isEmpty
-                    ? const _EmptyView()
-                    : RefreshIndicator(
-                        onRefresh: () => _fetchDashboard(isRefresh: true),
-                        color: const Color(0xFFD70F64),
-                        notificationPredicate: (notification) =>
-                            notification.depth == 0 && _currentPage == 0,
-                        child: PageView.builder(
-                          controller: _pageController,
-                          scrollDirection: Axis.vertical,
-                          physics: const PageScrollPhysics(
-                            parent: BouncingScrollPhysics(),
-                          ),
-                          itemCount: videos.length,
-                          onPageChanged: (i) => setState(() => _currentPage = i),
-                          itemBuilder: (ctx, i) => _VideoPage(
-                            video: videos[i],
-                            isActive: i == _currentPage && _playbackActive,
-                            isReelsOnly: true,
-                            onLikeSync: () => _fetchDashboard(isRefresh: true),
-                          ),
-                        ),
-                      ),
+            ? _ErrorView(message: _error!, onRetry: _fetchDashboard)
+            : videos.isEmpty
+            ? const _EmptyView()
+            : RefreshIndicator(
+                onRefresh: () => _fetchDashboard(isRefresh: true),
+                color: const Color(0xFFD70F64),
+                notificationPredicate: (notification) =>
+                    notification.depth == 0 && _currentPage == 0,
+                child: PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  physics: const PageScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  itemCount: videos.length,
+                  onPageChanged: (i) => setState(() => _currentPage = i),
+                  itemBuilder: (ctx, i) => _VideoPage(
+                    video: videos[i],
+                    isActive: i == _currentPage && _playbackActive,
+                    isReelsOnly: true,
+                    onLikeSync: () => _fetchDashboard(isRefresh: true),
+                  ),
+                ),
+              ),
       );
     }
 
@@ -520,30 +520,30 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBinding
               child: _isLoading
                   ? const _LoadingView()
                   : _error != null
-                      ? _ErrorView(message: _error!, onRetry: _fetchDashboard)
-                      : _videos.isEmpty
-                          ? const _EmptyView()
-                          : RefreshIndicator(
-                              onRefresh: () => _fetchDashboard(isRefresh: true),
-                              color: const Color(0xFFD70F64),
-                              notificationPredicate: (notification) =>
-                                  notification.depth == 0 && _currentPage == 0,
-                              child: PageView.builder(
-                                controller: _pageController,
-                                scrollDirection: Axis.vertical,
-                                physics: const PageScrollPhysics(
-                                  parent: BouncingScrollPhysics(),
-                                ),
-                                itemCount: _videos.length,
-                                onPageChanged: (i) => setState(() => _currentPage = i),
-                                itemBuilder: (ctx, i) => _VideoPage(
-                                  video: _videos[i],
-                                  isActive: i == _currentPage && _playbackActive,
-                                  isReelsOnly: false,
-                                  onLikeSync: () => _fetchDashboard(isRefresh: true),
-                                ),
-                              ),
-                            ),
+                  ? _ErrorView(message: _error!, onRetry: _fetchDashboard)
+                  : _videos.isEmpty
+                  ? const _EmptyView()
+                  : RefreshIndicator(
+                      onRefresh: () => _fetchDashboard(isRefresh: true),
+                      color: const Color(0xFFD70F64),
+                      notificationPredicate: (notification) =>
+                          notification.depth == 0 && _currentPage == 0,
+                      child: PageView.builder(
+                        controller: _pageController,
+                        scrollDirection: Axis.vertical,
+                        physics: const PageScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        itemCount: _videos.length,
+                        onPageChanged: (i) => setState(() => _currentPage = i),
+                        itemBuilder: (ctx, i) => _VideoPage(
+                          video: _videos[i],
+                          isActive: i == _currentPage && _playbackActive,
+                          isReelsOnly: false,
+                          onLikeSync: () => _fetchDashboard(isRefresh: true),
+                        ),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -827,8 +827,7 @@ class _VideoPageState extends State<_VideoPage>
     }
   }
 
-  bool get _isAdsVideo =>
-      widget.video.videoType.toLowerCase().trim() == 'ads';
+  bool get _isAdsVideo => widget.video.videoType.toLowerCase().trim() == 'ads';
 
   // Calls the correct view API based on video type.
   // Normal video  → /api/reporter/normal-video/view
@@ -914,10 +913,10 @@ class _VideoPageState extends State<_VideoPage>
       final bool? isLikedResp = json['liked'] is bool
           ? (json['liked'] as bool)
           : (json['is_liked'] is bool
-              ? (json['is_liked'] as bool)
-              : (json['action'] == 'liked'
-                  ? true
-                  : (json['action'] == 'unliked' ? false : null)));
+                ? (json['is_liked'] as bool)
+                : (json['action'] == 'liked'
+                      ? true
+                      : (json['action'] == 'unliked' ? false : null)));
 
       if (!mounted) return;
 
@@ -992,21 +991,24 @@ class _VideoPageState extends State<_VideoPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CommentsBottomSheet(
-        videoId: widget.video.id,
-        videoType: type,
-      ),
+      builder: (_) =>
+          _CommentsBottomSheet(videoId: widget.video.id, videoType: type),
     );
   }
 
   bool get _isSelfVideo {
-    final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+    final storage = Get.isRegistered<StorageService>()
+        ? Get.find<StorageService>()
+        : null;
     final currentUserId = storage?.getUserId() ?? 0;
     final currentUsername = storage?.getUsername().toLowerCase().trim() ?? '';
-    if (widget.video.userId > 0 && currentUserId > 0 && widget.video.userId == currentUserId) {
+    if (widget.video.userId > 0 &&
+        currentUserId > 0 &&
+        widget.video.userId == currentUserId) {
       return true;
     }
-    if (currentUsername.isNotEmpty && widget.video.username.toLowerCase().trim() == currentUsername) {
+    if (currentUsername.isNotEmpty &&
+        widget.video.username.toLowerCase().trim() == currentUsername) {
       return true;
     }
     return false;
@@ -1030,8 +1032,30 @@ class _VideoPageState extends State<_VideoPage>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: const Color(0xFF23232E),
+                backgroundImage: widget.video.userProfileImage.isNotEmpty
+                    ? NetworkImage(widget.video.userProfileImage)
+                    : null,
+                child: widget.video.userProfileImage.isEmpty
+                    ? Text(
+                        (widget.video.username.isNotEmpty
+                                ? widget.video.username
+                                : widget.video.name)[0]
+                            .toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      )
+                    : null,
+              ),
               Obx(() {
-                final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+                final storage = Get.isRegistered<StorageService>()
+                    ? Get.find<StorageService>()
+                    : null;
                 final myAvatar = storage?.profileImage.value ?? '';
                 final effectiveAvatar = (_isSelfVideo && myAvatar.isNotEmpty)
                     ? ApiEndpoints.mediaUrl(myAvatar)
@@ -1045,8 +1069,15 @@ class _VideoPageState extends State<_VideoPage>
                       : null,
                   child: effectiveAvatar.isEmpty
                       ? Text(
-                          (widget.video.username.isNotEmpty ? widget.video.username : widget.video.name)[0].toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          (widget.video.username.isNotEmpty
+                                  ? widget.video.username
+                                  : widget.video.name)[0]
+                              .toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         )
                       : null,
                 );
@@ -1070,20 +1101,31 @@ class _VideoPageState extends State<_VideoPage>
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(Icons.verified, color: Color(0xFF3897F0), size: 13),
+                        const Icon(
+                          Icons.verified,
+                          color: Color(0xFF3897F0),
+                          size: 13,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        const Icon(Icons.music_note, color: Colors.white60, size: 11),
+                        const Icon(
+                          Icons.music_note,
+                          color: Colors.white60,
+                          size: 11,
+                        ),
                         const SizedBox(width: 3),
                         Expanded(
                           child: Text(
                             widget.video.audioTitle.isNotEmpty
                                 ? widget.video.audioTitle
                                 : 'Original audio • Telso World',
-                            style: const TextStyle(color: Colors.white60, fontSize: 11),
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 11,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1094,21 +1136,33 @@ class _VideoPageState extends State<_VideoPage>
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+                icon: const Icon(
+                  Icons.more_vert,
+                  color: Colors.white70,
+                  size: 20,
+                ),
                 onPressed: () {
                   Get.bottomSheet(
                     Container(
                       padding: const EdgeInsets.symmetric(vertical: 20),
                       decoration: const BoxDecoration(
                         color: Color(0xFF161622),
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(20),
+                        ),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           ListTile(
-                            leading: const Icon(Icons.share, color: Colors.white),
-                            title: const Text('Share', style: TextStyle(color: Colors.white)),
+                            leading: const Icon(
+                              Icons.share,
+                              color: Colors.white,
+                            ),
+                            title: const Text(
+                              'Share',
+                              style: TextStyle(color: Colors.white),
+                            ),
                             onTap: () {
                               Get.back();
                               Share.share(
@@ -1118,11 +1172,22 @@ class _VideoPageState extends State<_VideoPage>
                             },
                           ),
                           ListTile(
-                            leading: const Icon(Icons.link, color: Colors.white),
-                            title: const Text('Copy link', style: TextStyle(color: Colors.white)),
+                            leading: const Icon(
+                              Icons.link,
+                              color: Colors.white,
+                            ),
+                            title: const Text(
+                              'Copy link',
+                              style: TextStyle(color: Colors.white),
+                            ),
                             onTap: () {
                               Get.back();
-                              Clipboard.setData(ClipboardData(text: 'https://telsoworld.com/reel/${widget.video.id}'));
+                              Clipboard.setData(
+                                ClipboardData(
+                                  text:
+                                      'https://telsoworld.com/reel/${widget.video.id}',
+                                ),
+                              );
                               Get.snackbar(
                                 'Link Copied',
                                 'Reel link copied to clipboard!',
@@ -1159,8 +1224,9 @@ class _VideoPageState extends State<_VideoPage>
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: double.infinity,
-                          errorBuilder: (_, __, ___) =>
-                              _VideoErrorPlaceholder(subject: widget.video.subject),
+                          errorBuilder: (_, __, ___) => _VideoErrorPlaceholder(
+                            subject: widget.video.subject,
+                          ),
                           loadingBuilder: (_, child, prog) => prog == null
                               ? child
                               : const Center(
@@ -1197,7 +1263,8 @@ class _VideoPageState extends State<_VideoPage>
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
-                                errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+                                errorBuilder: (_, __, ___) =>
+                                    const ColoredBox(color: Colors.black),
                               )
                             else
                               const ColoredBox(color: Colors.black),
@@ -1253,7 +1320,10 @@ class _VideoPageState extends State<_VideoPage>
                     bottom: 12,
                     right: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.65),
                         borderRadius: BorderRadius.circular(16),
@@ -1262,13 +1332,21 @@ class _VideoPageState extends State<_VideoPage>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.music_note_rounded, color: Colors.white, size: 14),
+                          const Icon(
+                            Icons.music_note_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             widget.video.audioTitle.isNotEmpty
                                 ? widget.video.audioTitle
                                 : 'Original audio',
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
@@ -1291,7 +1369,9 @@ class _VideoPageState extends State<_VideoPage>
                   GestureDetector(
                     onTap: () => _toggleLike(animateHeart: true),
                     child: Icon(
-                      _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      _isLiked
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
                       color: _isLiked ? const Color(0xFFFF2A6D) : Colors.white,
                       size: 26,
                     ),
@@ -1330,7 +1410,9 @@ class _VideoPageState extends State<_VideoPage>
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                          _isMuted
+                              ? Icons.volume_off_rounded
+                              : Icons.volume_up_rounded,
                           color: Colors.white,
                           size: 16,
                         ),
@@ -1363,7 +1445,8 @@ class _VideoPageState extends State<_VideoPage>
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   children: [
                     TextSpan(
-                      text: '${widget.video.username.isNotEmpty ? widget.video.username : widget.video.name} ',
+                      text:
+                          '${widget.video.username.isNotEmpty ? widget.video.username : widget.video.name} ',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     TextSpan(text: widget.video.subject),
@@ -1443,7 +1526,8 @@ class _VideoPageState extends State<_VideoPage>
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: double.infinity,
-                          errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+                          errorBuilder: (_, __, ___) =>
+                              const ColoredBox(color: Colors.black),
                         )
                       else
                         const ColoredBox(color: Colors.black),
@@ -1554,7 +1638,9 @@ class _VideoPageState extends State<_VideoPage>
             right: 10,
             bottom: 28,
             child: Obx(() {
-              final storage = Get.isRegistered<StorageService>() ? Get.find<StorageService>() : null;
+              final storage = Get.isRegistered<StorageService>()
+                  ? Get.find<StorageService>()
+                  : null;
               final myAvatar = storage?.profileImage.value ?? '';
               final effectiveAvatar = (_isSelfVideo && myAvatar.isNotEmpty)
                   ? ApiEndpoints.mediaUrl(myAvatar)
@@ -1657,7 +1743,11 @@ class _VideoErrorPlaceholder extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(
-                      colors: [Color(0xFFD70F64), Color(0xFF8A2387), Color(0xFFFF8008)],
+                      colors: [
+                        Color(0xFFD70F64),
+                        Color(0xFF8A2387),
+                        Color(0xFFFF8008),
+                      ],
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -1700,20 +1790,33 @@ class _VideoErrorPlaceholder extends StatelessWidget {
 
                 // Track tag badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00E5FF).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                    border: Border.all(
+                      color: const Color(0xFF00E5FF).withOpacity(0.3),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: const [
-                      Icon(Icons.graphic_eq_rounded, color: Color(0xFF00E5FF), size: 14),
+                      Icon(
+                        Icons.graphic_eq_rounded,
+                        color: Color(0xFF00E5FF),
+                        size: 14,
+                      ),
                       SizedBox(width: 6),
                       Text(
                         'Original Music Track • Live',
-                        style: TextStyle(color: Color(0xFF80D8FF), fontSize: 11, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: Color(0xFF80D8FF),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -1941,7 +2044,9 @@ class _RightActionsState extends State<_RightActions>
             setState(() => _isFollowing = !_isFollowing);
             Get.snackbar(
               _isFollowing ? 'Following ✨' : 'Unfollowed',
-              _isFollowing ? 'You are now following this creator' : 'Unfollowed creator',
+              _isFollowing
+                  ? 'You are now following this creator'
+                  : 'Unfollowed creator',
               snackPosition: SnackPosition.BOTTOM,
               backgroundColor: const Color(0xFF1E1E24),
               colorText: Colors.white,
@@ -2052,7 +2157,9 @@ class _Avatar extends StatelessWidget {
                 height: 20,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isFollowing ? const Color(0xFF00E676) : const Color(0xFFD70F64),
+                  color: isFollowing
+                      ? const Color(0xFF00E676)
+                      : const Color(0xFFD70F64),
                   border: Border.all(color: Colors.black, width: 1.5),
                 ),
                 child: Icon(
@@ -2163,10 +2270,7 @@ class _CommentsBottomSheet extends StatefulWidget {
   final int videoId;
   final String videoType; // normal | ads
 
-  const _CommentsBottomSheet({
-    required this.videoId,
-    required this.videoType,
-  });
+  const _CommentsBottomSheet({required this.videoId, required this.videoType});
 
   @override
   State<_CommentsBottomSheet> createState() => _CommentsBottomSheetState();
@@ -2236,7 +2340,9 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       final Map<String, dynamic> json =
           jsonDecode(response.body) as Map<String, dynamic>;
       if (json['status'] != true) {
-        throw Exception(json['message']?.toString() ?? 'Failed to fetch comments');
+        throw Exception(
+          json['message']?.toString() ?? 'Failed to fetch comments',
+        );
       }
 
       final List<dynamic> data = json['data'] as List<dynamic>? ?? [];
@@ -2245,7 +2351,10 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
           .toList();
 
       final pagination = json['pagination'] as Map<String, dynamic>? ?? {};
-      final fetchedCurrentPage = _toInt(pagination['current_page'], fallback: page);
+      final fetchedCurrentPage = _toInt(
+        pagination['current_page'],
+        fallback: page,
+      );
       final fetchedLastPage = _toInt(pagination['last_page'], fallback: page);
 
       if (!mounted) return;
@@ -2343,9 +2452,11 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
     setState(() {
       _likingCommentIds.add(comment.id);
       _comments = _comments
-          .map((c) => c.id == comment.id
-              ? c.copyWith(isLiked: optimisticLiked, likes: optimisticLikes)
-              : c)
+          .map(
+            (c) => c.id == comment.id
+                ? c.copyWith(isLiked: optimisticLiked, likes: optimisticLikes)
+                : c,
+          )
           .toList();
     });
 
@@ -2377,8 +2488,8 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       final bool? serverLiked = message.contains('unliked')
           ? false
           : message.contains('liked')
-              ? true
-              : null;
+          ? true
+          : null;
 
       if (!mounted) return;
       if (serverLiked != null && serverLiked != optimisticLiked) {
@@ -2387,9 +2498,11 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
             : (optimisticLikes > 0 ? optimisticLikes - 1 : 0);
         setState(() {
           _comments = _comments
-              .map((c) => c.id == comment.id
-                  ? c.copyWith(isLiked: serverLiked, likes: correctedLikes)
-                  : c)
+              .map(
+                (c) => c.id == comment.id
+                    ? c.copyWith(isLiked: serverLiked, likes: correctedLikes)
+                    : c,
+              )
               .toList();
         });
       }
@@ -2397,9 +2510,11 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       if (!mounted) return;
       setState(() {
         _comments = _comments
-            .map((c) => c.id == comment.id
-                ? c.copyWith(isLiked: previousLiked, likes: previousLikes)
-                : c)
+            .map(
+              (c) => c.id == comment.id
+                  ? c.copyWith(isLiked: previousLiked, likes: previousLikes)
+                  : c,
+            )
             .toList();
       });
     } finally {
@@ -2415,7 +2530,10 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E24),
-        title: const Text('Edit Comment', style: TextStyle(color: Colors.white, fontSize: 16)),
+        title: const Text(
+          'Edit Comment',
+          style: TextStyle(color: Colors.white, fontSize: 16),
+        ),
         content: TextField(
           controller: textController,
           autofocus: true,
@@ -2424,14 +2542,21 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
           decoration: const InputDecoration(
             hintText: 'Edit your comment...',
             hintStyle: TextStyle(color: Colors.white38),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFD70F64))),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFD70F64))),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFD70F64)),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFD70F64)),
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(null),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white54),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(textController.text.trim()),
@@ -2445,7 +2570,10 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       ),
     );
 
-    if (editedText == null || editedText.isEmpty || editedText == comment.comment) return;
+    if (editedText == null ||
+        editedText.isEmpty ||
+        editedText == comment.comment)
+      return;
 
     try {
       final token = await SessionTokenStore.getToken();
@@ -2465,7 +2593,9 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
         if (!mounted) return;
         setState(() {
           _comments = _comments
-              .map((c) => c.id == comment.id ? c.copyWith(comment: editedText) : c)
+              .map(
+                (c) => c.id == comment.id ? c.copyWith(comment: editedText) : c,
+              )
               .toList();
         });
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2540,7 +2670,9 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       final Map<String, dynamic> json =
           jsonDecode(response.body) as Map<String, dynamic>;
       if (json['status'] != true) {
-        throw Exception(json['message']?.toString() ?? 'Failed to delete comment');
+        throw Exception(
+          json['message']?.toString() ?? 'Failed to delete comment',
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -2607,9 +2739,7 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
               ),
               const SizedBox(height: 10),
               const Divider(color: Colors.white12, height: 1),
-              Expanded(
-                child: _buildBody(controller),
-              ),
+              Expanded(child: _buildBody(controller)),
               _buildComposer(),
             ],
           ),
@@ -2682,7 +2812,11 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
                             color: Colors.white,
                           ),
                         )
-                      : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                      : const Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                 ),
               ),
             ],
@@ -2719,7 +2853,10 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFD70F64),
                 ),
-                child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                child: const Text(
+                  'Retry',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -2809,7 +2946,10 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
                         : () => _toggleCommentLike(item),
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
                       child: _likingCommentIds.contains(item.id)
                           ? const SizedBox(
                               width: 14,
@@ -2820,7 +2960,9 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
                               ),
                             )
                           : Icon(
-                              item.isLiked ? Icons.favorite : Icons.favorite_border,
+                              item.isLiked
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
                               size: 14,
                               color: item.isLiked
                                   ? const Color(0xFFD70F64)
@@ -2838,7 +2980,10 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
                     onTap: () => _openRepliesSheet(item),
                     borderRadius: BorderRadius.circular(10),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
                       child: Text(
                         '${item.replyCount} replies',
                         style: const TextStyle(
@@ -2858,7 +3003,11 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
             children: [
               IconButton(
                 onPressed: () => _editCommentDialog(item),
-                icon: const Icon(Icons.edit_outlined, color: Colors.white54, size: 18),
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  color: Colors.white54,
+                  size: 18,
+                ),
                 tooltip: 'Edit comment',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -2875,14 +3024,21 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
                     )
                   : IconButton(
                       onPressed: () => _confirmDeleteComment(item),
-                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.white54, size: 18),
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.white54,
+                        size: 18,
+                      ),
                       tooltip: 'Delete comment',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
             ],
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
         );
       },
     );
@@ -2893,10 +3049,8 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _RepliesBottomSheet(
-        commentId: comment.id,
-        parentUser: comment.user,
-      ),
+      builder: (_) =>
+          _RepliesBottomSheet(commentId: comment.id, parentUser: comment.user),
     );
   }
 }
@@ -2935,7 +3089,9 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
       final token = await SessionTokenStore.getToken();
       final response = await http
           .get(
-            Uri.parse('${ApiEndpoints.baseUrl}/comments/${widget.commentId}/replies'),
+            Uri.parse(
+              '${ApiEndpoints.baseUrl}/comments/${widget.commentId}/replies',
+            ),
             headers: {
               'Authorization': 'Bearer $token',
               'Accept': 'application/json',
@@ -2950,7 +3106,9 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
       final Map<String, dynamic> json =
           jsonDecode(response.body) as Map<String, dynamic>;
       if (json['status'] != true) {
-        throw Exception(json['message']?.toString() ?? 'Failed to fetch replies');
+        throw Exception(
+          json['message']?.toString() ?? 'Failed to fetch replies',
+        );
       }
 
       final data = json['data'] as List<dynamic>? ?? [];
@@ -3015,7 +3173,10 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
                         '@${widget.parentUser}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                     Text(
@@ -3061,7 +3222,10 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFD70F64),
                 ),
-                child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                child: const Text(
+                  'Retry',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -3086,8 +3250,9 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
           leading: CircleAvatar(
             radius: 18,
             backgroundColor: Colors.white12,
-            backgroundImage:
-                item.profileImage.isNotEmpty ? NetworkImage(item.profileImage) : null,
+            backgroundImage: item.profileImage.isNotEmpty
+                ? NetworkImage(item.profileImage)
+                : null,
             child: item.profileImage.isEmpty
                 ? const Icon(Icons.person, color: Colors.white70, size: 17)
                 : null,
@@ -3115,7 +3280,10 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
               ),
             ],
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
         );
       },
     );
@@ -3167,7 +3335,9 @@ class _BottomInfo extends StatelessWidget {
 
         // Video Caption / Subject
         Text(
-          video.subject.isNotEmpty ? video.subject : 'Watch trending reels on Telso World! 🌟',
+          video.subject.isNotEmpty
+              ? video.subject
+              : 'Watch trending reels on Telso World! 🌟',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -3206,7 +3376,11 @@ class _BottomInfo extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.music_note_rounded, color: Color(0xFF00E5FF), size: 14),
+              const Icon(
+                Icons.music_note_rounded,
+                color: Color(0xFF00E5FF),
+                size: 14,
+              ),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
