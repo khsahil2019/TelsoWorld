@@ -709,15 +709,15 @@ class PostgresDatabase {
     let idx = 1;
 
     if (type && type !== 'all') {
-      where.push(`video_type = $${idx++}`);
+      where.push(`v.video_type = $${idx++}`);
       vals.push(type);
     }
     if (status && status !== 'all') {
-      where.push(`status = $${idx++}`);
+      where.push(`v.status = $${idx++}`);
       vals.push(status);
     }
     if (search) {
-      where.push(`(LOWER(title) LIKE $${idx} OR LOWER(subject) LIKE $${idx} OR LOWER(name) LIKE $${idx})`);
+      where.push(`(LOWER(v.title) LIKE $${idx} OR LOWER(v.subject) LIKE $${idx} OR LOWER(v.name) LIKE $${idx} OR LOWER(u.name) LIKE $${idx} OR LOWER(u.username) LIKE $${idx})`);
       vals.push(`%${search.toLowerCase()}%`);
       idx++;
     }
@@ -727,7 +727,11 @@ class PostgresDatabase {
     if (limit) vals.push(limit);
 
     const { rows } = await this.pool.query(
-      `SELECT * FROM videos ${whereSql} ORDER BY id DESC ${limitSql}`,
+      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle
+       FROM videos v
+       LEFT JOIN users u ON v.user_id = u.id
+       ${whereSql}
+       ORDER BY v.id DESC ${limitSql}`,
       vals
     );
 
@@ -747,7 +751,11 @@ class PostgresDatabase {
   async getUserVideos(userId) {
     const numericId = parseInt(userId, 10);
     const { rows } = await this.pool.query(
-      'SELECT * FROM videos WHERE user_id = $1 ORDER BY id DESC',
+      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle
+       FROM videos v
+       LEFT JOIN users u ON v.user_id = u.id
+       WHERE v.user_id = $1
+       ORDER BY v.id DESC`,
       [numericId]
     );
     return rows.map(mapVideo);
@@ -756,7 +764,14 @@ class PostgresDatabase {
   async findVideoById(id, currentUserId = null) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) return null;
-    const { rows } = await this.pool.query('SELECT * FROM videos WHERE id = $1 LIMIT 1', [numericId]);
+    const { rows } = await this.pool.query(
+      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle
+       FROM videos v
+       LEFT JOIN users u ON v.user_id = u.id
+       WHERE v.id = $1
+       LIMIT 1`,
+      [numericId]
+    );
     if (!rows[0]) return null;
     const v = mapVideo(rows[0]);
     const cId = currentUserId ? parseInt(currentUserId, 10) : null;
@@ -1667,6 +1682,258 @@ class PostgresDatabase {
       normal_videos_count: v.normal_videos_count,
       ads_videos_count: v.ads_videos_count,
     };
+  }
+  // --- Stories ---
+  async createStory({ userId, mediaUrl, mediaType = 'image', caption = '' }) {
+    const numericUserId = parseInt(userId, 10);
+    const user = await this.findUserById(numericUserId);
+    const username = user ? user.username : 'creator';
+    const name = user ? user.name : 'Creator';
+    const profileImage = user ? (user.profile_image || '') : '';
+
+    const { rows } = await this.pool.query(
+      `INSERT INTO stories (user_id, username, name, profile_image, media_url, media_type, caption, views_count, viewed_by, created_at, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 0, '[]'::jsonb, NOW(), NOW() + INTERVAL '24 hours')
+       RETURNING *`,
+      [numericUserId, username, name, profileImage, mediaUrl, mediaType, caption]
+    );
+    return rows[0];
+  }
+
+  async getActiveStories(currentUserId = null) {
+    const cId = currentUserId ? parseInt(currentUserId, 10) : null;
+    const { rows } = await this.pool.query(
+      `SELECT s.*, u.name AS u_name, u.username AS u_username, u.profile_image AS u_profile_image
+       FROM stories s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.expires_at > NOW()
+       ORDER BY s.created_at ASC`
+    );
+
+    const userMap = new Map();
+    for (const row of rows) {
+      const uId = row.user_id;
+      if (!userMap.has(uId)) {
+        userMap.set(uId, {
+          user_id: uId,
+          username: row.u_username || row.username,
+          name: row.u_name || row.name,
+          profile_image: row.u_profile_image || row.profile_image || '',
+          stories: [],
+        });
+      }
+      const viewedBy = Array.isArray(row.viewed_by) ? row.viewed_by : [];
+      userMap.get(uId).stories.push({
+        id: row.id,
+        user_id: row.user_id,
+        media_url: row.media_url,
+        media_type: row.media_type || 'image',
+        caption: row.caption || '',
+        views_count: row.views_count || 0,
+        viewed: cId ? viewedBy.includes(cId) : false,
+        created_at: toIso(row.created_at),
+        expires_at: toIso(row.expires_at),
+      });
+    }
+    return Array.from(userMap.values());
+  }
+
+  async recordStoryView(storyId, viewerId) {
+    const sId = parseInt(storyId, 10);
+    const vId = parseInt(viewerId, 10);
+    if (!sId || !vId) return;
+    await this.pool.query(
+      `UPDATE stories
+       SET views_count = views_count + 1,
+           viewed_by = CASE
+             WHEN viewed_by @> $1::jsonb THEN viewed_by
+             ELSE viewed_by || $1::jsonb
+           END
+       WHERE id = $2`,
+      [JSON.stringify([vId]), sId]
+    );
+  }
+
+  // --- Blocking ---
+  async toggleBlock(currentUserId, targetId) {
+    const blockerId = parseInt(currentUserId, 10);
+    const blockedId = parseInt(targetId, 10);
+    const check = await this.pool.query(
+      'SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2',
+      [blockerId, blockedId]
+    );
+    if (check.rowCount > 0) {
+      await this.pool.query('DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [blockerId, blockedId]);
+      return { blocked: false };
+    } else {
+      await this.pool.query('INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [blockerId, blockedId]);
+      return { blocked: true };
+    }
+  }
+
+  async getBlockedUsers(currentUserId) {
+    const uid = parseInt(currentUserId, 10);
+    const { rows } = await this.pool.query(
+      `SELECT u.id, u.name, u.username, u.profile_image
+       FROM blocks b
+       JOIN users u ON b.blocked_id = u.id
+       WHERE b.blocker_id = $1`,
+      [uid]
+    );
+    return rows;
+  }
+
+  // --- Conversations & Direct Messaging ---
+  async getConversations(currentUserId) {
+    const uid = parseInt(currentUserId, 10);
+    const { rows } = await this.pool.query(
+      `SELECT c.*,
+              u1.id AS u1_id, u1.name AS u1_name, u1.username AS u1_username, u1.profile_image AS u1_avatar,
+              u2.id AS u2_id, u2.name AS u2_name, u2.username AS u2_username, u2.profile_image AS u2_avatar
+       FROM conversations c
+       JOIN users u1 ON c.user1_id = u1.id
+       JOIN users u2 ON c.user2_id = u2.id
+       WHERE c.user1_id = $1 OR c.user2_id = $1
+       ORDER BY c.updated_at DESC`,
+      [uid]
+    );
+
+    const chats = [];
+    const requests = [];
+
+    for (const r of rows) {
+      const isUser1 = r.user1_id === uid;
+      const otherId = isUser1 ? r.u2_id : r.u1_id;
+      const otherName = isUser1 ? r.u2_name : r.u1_name;
+      const otherUsername = isUser1 ? r.u2_username : r.u1_username;
+      const otherAvatar = isUser1 ? r.u2_avatar : r.u1_avatar;
+
+      const item = {
+        id: r.id,
+        other_user_id: otherId,
+        other_user_name: otherName,
+        other_username: otherUsername,
+        other_user_avatar: otherAvatar || '',
+        status: r.status,
+        initiated_by: r.initiated_by,
+        last_message: r.last_message || '',
+        last_message_time: toIso(r.last_message_time || r.updated_at),
+      };
+
+      if (r.status === 'accepted' || (r.status === 'pending' && r.initiated_by === uid)) {
+        chats.push(item);
+      } else {
+        requests.push(item);
+      }
+    }
+
+    return { chats, requests };
+  }
+
+  async sendMessage({ senderId, receiverId, message, mediaUrl = '' }) {
+    const sId = parseInt(senderId, 10);
+    const rId = parseInt(receiverId, 10);
+
+    const blockCheck = await this.pool.query(
+      'SELECT 1 FROM blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)',
+      [sId, rId]
+    );
+    if (blockCheck.rowCount > 0) {
+      return { success: false, blocked: true, message: 'Cannot message this user due to privacy settings.' };
+    }
+
+    const u1 = Math.min(sId, rId);
+    const u2 = Math.max(sId, rId);
+
+    let convRes = await this.pool.query(
+      'SELECT * FROM conversations WHERE user1_id = $1 AND user2_id = $2',
+      [u1, u2]
+    );
+
+    let conv;
+    if (convRes.rowCount === 0) {
+      const isMutual = await this.isFollowing(rId, sId);
+      const initialStatus = isMutual ? 'accepted' : 'pending';
+      const insertConv = await this.pool.query(
+        `INSERT INTO conversations (user1_id, user2_id, initiated_by, status, last_message, last_message_time, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+         RETURNING *`,
+        [u1, u2, sId, initialStatus, message]
+      );
+      conv = insertConv.rows[0];
+    } else {
+      conv = convRes.rows[0];
+      await this.pool.query(
+        `UPDATE conversations
+         SET last_message = $1, last_message_time = NOW(), updated_at = NOW()
+         WHERE id = $2`,
+        [message, conv.id]
+      );
+    }
+
+    const msgRes = await this.pool.query(
+      `INSERT INTO messages (conversation_id, sender_id, receiver_id, message, media_url, is_read, created_at)
+       VALUES ($1, $2, $3, $4, $5, FALSE, NOW())
+       RETURNING *`,
+      [conv.id, sId, rId, message, mediaUrl]
+    );
+
+    return {
+      success: true,
+      message: msgRes.rows[0],
+      conversation: conv,
+    };
+  }
+
+  async getMessages(conversationId, currentUserId) {
+    const convId = parseInt(conversationId, 10);
+    const cId = parseInt(currentUserId, 10);
+
+    await this.pool.query(
+      'UPDATE messages SET is_read = TRUE WHERE conversation_id = $1 AND receiver_id = $2 AND is_read = FALSE',
+      [convId, cId]
+    );
+
+    const { rows } = await this.pool.query(
+      `SELECT m.*, u.name AS sender_name, u.username AS sender_username, u.profile_image AS sender_avatar
+       FROM messages m
+       JOIN users u ON m.sender_id = u.id
+       WHERE m.conversation_id = $1
+       ORDER BY m.created_at ASC`,
+      [convId]
+    );
+    return rows;
+  }
+
+  async respondToRequest(conversationId, currentUserId, action) {
+    const convId = parseInt(conversationId, 10);
+    const cId = parseInt(currentUserId, 10);
+
+    if (action === 'accept') {
+      await this.pool.query(
+        "UPDATE conversations SET status = 'accepted', updated_at = NOW() WHERE id = $1",
+        [convId]
+      );
+      return { success: true, message: 'Request accepted!' };
+    } else if (action === 'decline') {
+      await this.pool.query(
+        "UPDATE conversations SET status = 'declined', updated_at = NOW() WHERE id = $1",
+        [convId]
+      );
+      return { success: true, message: 'Request declined.' };
+    } else if (action === 'block') {
+      const conv = await this.pool.query('SELECT user1_id, user2_id FROM conversations WHERE id = $1', [convId]);
+      if (conv.rowCount > 0) {
+        const otherId = conv.rows[0].user1_id === cId ? conv.rows[0].user2_id : conv.rows[0].user1_id;
+        await this.toggleBlock(cId, otherId);
+      }
+      await this.pool.query(
+        "UPDATE conversations SET status = 'declined', updated_at = NOW() WHERE id = $1",
+        [convId]
+      );
+      return { success: true, message: 'User blocked.' };
+    }
+    return { success: false, message: 'Invalid action' };
   }
 }
 

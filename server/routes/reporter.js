@@ -22,20 +22,25 @@ function formatVideoResponse(req, v) {
   const videoUrl = normalizeMediaUrl(req, rawVideo);
   const rawThumb = v.thumbnail_url || v.image || '';
   const thumbUrl = normalizeMediaUrl(req, rawThumb);
+  const fallbackMedia = v.media_type === 'photo' ? videoUrl : '';
+  const resolvedThumb = thumbUrl || fallbackMedia;
+  const userAvatar = normalizeMediaUrl(req, v.user_profile_image || v.profile_image || '');
 
   return {
     id: v.id,
     user_id: v.user_id,
-    name: v.name || v.username || 'Telso Creator',
-    username: v.username || 'creator',
+    name: v.user_name || v.name || v.username || 'Telso Creator',
+    username: v.user_handle || v.username || 'creator',
+    user_profile_image: userAvatar,
+    profile_image: userAvatar,
     title: v.title,
     subject: v.subject || v.title,
     category: v.category || 'Music',
     video_url: videoUrl,
     video_path: videoUrl,
     url: videoUrl,
-    thumbnail_url: thumbUrl,
-    image: thumbUrl,
+    thumbnail_url: resolvedThumb,
+    image: resolvedThumb,
     video_type: v.video_type || 'normal',
     likes_count: v.likes_count || 0,
     shares_count: v.shares_count || 0,
@@ -46,7 +51,7 @@ function formatVideoResponse(req, v) {
     has_audio: v.has_audio !== false,
     audio_title: v.audio_title || '',
     media_type: v.media_type || 'video',
-    photo_url: v.photo_url ? normalizeMediaUrl(req, v.photo_url) : (v.media_type === 'photo' ? videoUrl : thumbUrl),
+    photo_url: v.photo_url ? normalizeMediaUrl(req, v.photo_url) : (v.media_type === 'photo' ? videoUrl : resolvedThumb),
     status: v.status || 'Approved',
     created_at: v.created_at,
   };
@@ -229,7 +234,7 @@ router.get('/profile', authOptional, async (req, res) => {
       whatsapp: user.whatsapp || user.mobile_no,
       dob: user.dob,
       bio: user.bio || 'Official Creator on Telso World 🎵 Singer, Music Producer & Live Performer.',
-      profile_image: user.profile_image || '',
+      profile_image: normalizeMediaUrl(req, user.profile_image || ''),
       verified: true,
       followers_count: stats.followers_count || 0,
       following_count: stats.following_count || 0,

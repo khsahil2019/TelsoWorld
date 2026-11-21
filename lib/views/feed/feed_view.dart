@@ -70,6 +70,7 @@ class VideoItem {
   final String username;
   final String subject;
   final String name;
+  final String userProfileImage;
   final String videoPath;
   final String photoUrl;
   final String mediaType; // 'video' | 'photo'
@@ -90,6 +91,7 @@ class VideoItem {
     required this.username,
     required this.subject,
     required this.name,
+    this.userProfileImage = '',
     required this.videoPath,
     this.photoUrl = '',
     this.mediaType = 'video',
@@ -135,12 +137,15 @@ class VideoItem {
       photo = _normalizeVideoUrl(rawVideoUrl);
     }
 
+    final rawAvatar = (json['user_profile_image'] ?? json['profile_image'] ?? '').toString().trim();
+
     return VideoItem(
       id: json['id'] as int? ?? 0,
       userId: _toInt(json['user_id']),
       username: json['username']?.toString() ?? '',
       subject: json['subject']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Unknown',
+      userProfileImage: rawAvatar.isNotEmpty ? _normalizeVideoUrl(rawAvatar) : '',
       videoPath: _normalizeVideoUrl(rawVideoUrl),
       photoUrl: photo,
       mediaType: isPhoto ? 'photo' : 'video',
@@ -261,10 +266,6 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBinding
   bool get _playbackActive => widget.visible && !_routeCovered && !_appInBackground;
 
   List<VideoItem> get _displayVideos {
-    if (widget.isReelsOnly) {
-      final list = _videos.where((v) => v.mediaType == 'video').toList();
-      return list.isNotEmpty ? list : _videos;
-    }
     return _videos;
   }
 
@@ -1032,10 +1033,15 @@ class _VideoPageState extends State<_VideoPage>
               CircleAvatar(
                 radius: 17,
                 backgroundColor: const Color(0xFF23232E),
-                child: Text(
-                  (widget.video.username.isNotEmpty ? widget.video.username : widget.video.name)[0].toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                ),
+                backgroundImage: widget.video.userProfileImage.isNotEmpty
+                    ? NetworkImage(widget.video.userProfileImage)
+                    : null,
+                child: widget.video.userProfileImage.isEmpty
+                    ? Text(
+                        (widget.video.username.isNotEmpty ? widget.video.username : widget.video.name)[0].toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      )
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1545,6 +1551,7 @@ class _VideoPageState extends State<_VideoPage>
               sharesCount: widget.video.sharesCount,
               videoTitle: widget.video.subject,
               videoId: widget.video.id,
+              profileImage: widget.video.userProfileImage,
               showFollowButton: !_isSelfVideo,
               onLikeTap: () => _toggleLike(),
               onCommentTap: _openCommentsSheet,
@@ -1842,6 +1849,7 @@ class _RightActions extends StatefulWidget {
   final int sharesCount;
   final String videoTitle;
   final int videoId;
+  final String profileImage;
   final bool showFollowButton;
   final VoidCallback onLikeTap;
   final VoidCallback onCommentTap;
@@ -1852,6 +1860,7 @@ class _RightActions extends StatefulWidget {
     required this.sharesCount,
     this.videoTitle = 'Telso Reel',
     this.videoId = 0,
+    this.profileImage = '',
     this.showFollowButton = true,
     required this.onLikeTap,
     required this.onCommentTap,
@@ -1909,6 +1918,7 @@ class _RightActionsState extends State<_RightActions>
       children: [
         // Avatar with Follow + Badge (Only shown if not own video)
         _Avatar(
+          profileImage: widget.profileImage,
           showFollowButton: widget.showFollowButton,
           isFollowing: _isFollowing,
           onFollowTap: () {
@@ -1974,11 +1984,13 @@ class _RightActionsState extends State<_RightActions>
 }
 
 class _Avatar extends StatelessWidget {
+  final String profileImage;
   final bool isFollowing;
   final bool showFollowButton;
   final VoidCallback onFollowTap;
 
   const _Avatar({
+    this.profileImage = '',
     this.isFollowing = false,
     this.showFollowButton = true,
     required this.onFollowTap,
@@ -2000,8 +2012,17 @@ class _Avatar extends StatelessWidget {
               colors: [Color(0xFFD70F64), Color(0xFFFF8008)],
             ),
           ),
-          child: const ClipOval(
-            child: Icon(Icons.person, color: Colors.white, size: 28),
+          child: ClipOval(
+            child: profileImage.isNotEmpty
+                ? Image.network(
+                    profileImage,
+                    fit: BoxFit.cover,
+                    width: 48,
+                    height: 48,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.person, color: Colors.white, size: 28),
+                  )
+                : const Icon(Icons.person, color: Colors.white, size: 28),
           ),
         ),
         if (showFollowButton)
