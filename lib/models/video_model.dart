@@ -42,11 +42,20 @@ class VideoModel {
     final urlVal = json['video_url']?.toString() ?? json['video_path']?.toString() ?? json['url']?.toString() ?? '';
     final rawPhoto = (json['photo_url'] ?? json['image'] ?? json['thumbnail_url'] ?? '').toString().trim();
     final rawType = json['media_type']?.toString().toLowerCase().trim() ?? '';
+    final isExplicitVideo = rawType == 'video' ||
+        urlVal.toLowerCase().endsWith('.mp4') ||
+        urlVal.toLowerCase().endsWith('.mov') ||
+        urlVal.toLowerCase().endsWith('.m4v') ||
+        urlVal.toLowerCase().endsWith('.webm') ||
+        urlVal.toLowerCase().endsWith('.mkv');
     final isPhoto = rawType == 'photo' ||
-        urlVal.toLowerCase().endsWith('.jpg') ||
-        urlVal.toLowerCase().endsWith('.png') ||
-        urlVal.toLowerCase().endsWith('.jpeg') ||
-        urlVal.toLowerCase().endsWith('.webp');
+        (!isExplicitVideo && (
+            urlVal.toLowerCase().endsWith('.jpg') ||
+            urlVal.toLowerCase().endsWith('.png') ||
+            urlVal.toLowerCase().endsWith('.jpeg') ||
+            urlVal.toLowerCase().endsWith('.webp') ||
+            urlVal.toLowerCase().endsWith('.gif')
+        ));
     final resolvedPhoto = rawPhoto.isNotEmpty ? rawPhoto : (isPhoto ? urlVal : null);
 
     return VideoModel(

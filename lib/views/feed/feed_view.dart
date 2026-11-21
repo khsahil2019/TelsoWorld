@@ -112,15 +112,21 @@ class VideoItem {
         json['thumbnail_url'] ??
         '').toString().trim();
 
+    final isExplicitVideo = rawType == 'video' ||
+        rawVideoUrl.toLowerCase().endsWith('.mp4') ||
+        rawVideoUrl.toLowerCase().endsWith('.mov') ||
+        rawVideoUrl.toLowerCase().endsWith('.m4v') ||
+        rawVideoUrl.toLowerCase().endsWith('.webm') ||
+        rawVideoUrl.toLowerCase().endsWith('.mkv');
+
     final isPhoto = rawType == 'photo' ||
-        rawVideoUrl.toLowerCase().endsWith('.jpg') ||
-        rawVideoUrl.toLowerCase().endsWith('.png') ||
-        rawVideoUrl.toLowerCase().endsWith('.jpeg') ||
-        rawVideoUrl.toLowerCase().endsWith('.webp') ||
-        rawPhotoUrl.toLowerCase().endsWith('.jpg') ||
-        rawPhotoUrl.toLowerCase().endsWith('.png') ||
-        rawPhotoUrl.toLowerCase().endsWith('.jpeg') ||
-        rawPhotoUrl.toLowerCase().endsWith('.webp');
+        (!isExplicitVideo && (
+            rawVideoUrl.toLowerCase().endsWith('.jpg') ||
+            rawVideoUrl.toLowerCase().endsWith('.png') ||
+            rawVideoUrl.toLowerCase().endsWith('.jpeg') ||
+            rawVideoUrl.toLowerCase().endsWith('.webp') ||
+            rawVideoUrl.toLowerCase().endsWith('.gif')
+        ));
 
     String photo = '';
     if (rawPhotoUrl.isNotEmpty) {
@@ -253,6 +259,14 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBinding
   bool _appInBackground = false;
 
   bool get _playbackActive => widget.visible && !_routeCovered && !_appInBackground;
+
+  List<VideoItem> get _displayVideos {
+    if (widget.isReelsOnly) {
+      final list = _videos.where((v) => v.mediaType == 'video').toList();
+      return list.isNotEmpty ? list : _videos;
+    }
+    return _videos;
+  }
 
   bool _isLoading = true;
   String? _error;
@@ -438,6 +452,7 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBinding
   Widget build(BuildContext context) {
     if (widget.isReelsOnly) {
       // 🎬 REELS TAB: Fullscreen Immersive Reels Swiper
+      final videos = _displayVideos;
       return Scaffold(
         backgroundColor: Colors.black,
         extendBodyBehindAppBar: true,
@@ -445,7 +460,7 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBinding
             ? const _LoadingView()
             : _error != null
                 ? _ErrorView(message: _error!, onRetry: _fetchDashboard)
-                : _videos.isEmpty
+                : videos.isEmpty
                     ? const _EmptyView()
                     : RefreshIndicator(
                         onRefresh: () => _fetchDashboard(isRefresh: true),
@@ -458,10 +473,10 @@ class _FeedScreenState extends State<FeedScreen> with RouteAware, WidgetsBinding
                           physics: const PageScrollPhysics(
                             parent: BouncingScrollPhysics(),
                           ),
-                          itemCount: _videos.length,
+                          itemCount: videos.length,
                           onPageChanged: (i) => setState(() => _currentPage = i),
                           itemBuilder: (ctx, i) => _VideoPage(
-                            video: _videos[i],
+                            video: videos[i],
                             isActive: i == _currentPage && _playbackActive,
                             isReelsOnly: true,
                             onLikeSync: () => _fetchDashboard(isRefresh: true),
@@ -700,7 +715,8 @@ class _VideoPageState extends State<_VideoPage>
         }
         _controller = controller;
         setState(() => _initialized = true);
-        if (widget.isActive) {
+        if (widget.isActive && !_isManuallyPaused) {
+          await controller.setVolume(_isMuted ? 0.0 : 1.0);
           controller.play();
           _callViewApi();
         }
@@ -721,7 +737,8 @@ class _VideoPageState extends State<_VideoPage>
         }
         _controller = controller;
         setState(() => _initialized = true);
-        if (widget.isActive) {
+        if (widget.isActive && !_isManuallyPaused) {
+          await controller.setVolume(_isMuted ? 0.0 : 1.0);
           controller.play();
           _callViewApi();
         }
@@ -741,7 +758,7 @@ class _VideoPageState extends State<_VideoPage>
   Future<VideoPlayerController> _buildNetworkController(Uri uri) async {
     final controller = VideoPlayerController.networkUrl(
       uri,
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
     await controller.initialize();
     await controller.setLooping(true);
@@ -766,7 +783,10 @@ class _VideoPageState extends State<_VideoPage>
     await file.writeAsBytes(response.bodyBytes, flush: true);
     _cachedVideoFile = file;
 
-    final controller = VideoPlayerController.file(file);
+    final controller = VideoPlayerController.file(
+      file,
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
     await controller.initialize();
     await controller.setLooping(true);
     await controller.setVolume(_isMuted ? 0.0 : 1.0);
@@ -1154,14 +1174,26 @@ class _VideoPageState extends State<_VideoPage>
                             ),
                           ),
                         )
-                      : const ColoredBox(
-                          color: Colors.black,
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFFD70F64),
-                              strokeWidth: 2,
+                      : Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (widget.video.photoUrl.isNotEmpty)
+                              Image.network(
+                                widget.video.photoUrl,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+                              )
+                            else
+                              const ColoredBox(color: Colors.black),
+                            const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFFD70F64),
+                                strokeWidth: 2,
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                 ),
 
@@ -1388,14 +1420,26 @@ class _VideoPageState extends State<_VideoPage>
                       ),
                     ),
                   )
-                : const ColoredBox(
-                    color: Colors.black,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFFD70F64),
-                        strokeWidth: 2,
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (widget.video.photoUrl.isNotEmpty)
+                        Image.network(
+                          widget.video.photoUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+                        )
+                      else
+                        const ColoredBox(color: Colors.black),
+                      const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFD70F64),
+                          strokeWidth: 2,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
           ),
 

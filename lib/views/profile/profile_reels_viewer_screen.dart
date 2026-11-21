@@ -162,16 +162,20 @@ class _ProfileReelPageItemState extends State<_ProfileReelPageItem>
   bool get _isPhoto {
     final rawType = widget.video['media_type']?.toString().toLowerCase().trim() ?? '';
     final urlStr = _resolveVideoUrl().toLowerCase();
-    final photoStr = (widget.video['photo_url'] ?? widget.video['image'] ?? '').toString().toLowerCase();
+    final isExplicitVideo = rawType == 'video' ||
+        urlStr.endsWith('.mp4') ||
+        urlStr.endsWith('.mov') ||
+        urlStr.endsWith('.m4v') ||
+        urlStr.endsWith('.webm') ||
+        urlStr.endsWith('.mkv');
     return rawType == 'photo' ||
-        urlStr.endsWith('.jpg') ||
-        urlStr.endsWith('.png') ||
-        urlStr.endsWith('.jpeg') ||
-        urlStr.endsWith('.webp') ||
-        photoStr.endsWith('.jpg') ||
-        photoStr.endsWith('.png') ||
-        photoStr.endsWith('.jpeg') ||
-        photoStr.endsWith('.webp');
+        (!isExplicitVideo && (
+            urlStr.endsWith('.jpg') ||
+            urlStr.endsWith('.png') ||
+            urlStr.endsWith('.jpeg') ||
+            urlStr.endsWith('.webp') ||
+            urlStr.endsWith('.gif')
+        ));
   }
 
   String _resolvePhotoUrl() {
