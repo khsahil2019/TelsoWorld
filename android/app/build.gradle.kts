@@ -14,6 +14,46 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// ── Automatic Version Code Auto-Increment ────────────────────────────
+val versionProps = Properties()
+val versionPropsFile = rootProject.file("version.properties")
+if (!versionPropsFile.exists()) {
+    versionProps["versionCode"] = "2010"
+    versionProps.store(versionPropsFile.writer(), "Initial version code")
+} else {
+    versionProps.load(FileInputStream(versionPropsFile))
+}
+
+val isReleaseBuild = gradle.startParameter.taskNames.any {
+    it.contains("bundleRelease", ignoreCase = true) || it.contains("assembleRelease", ignoreCase = true)
+}
+
+val storedCode = (versionProps["versionCode"] as String? ?: "2010").toInt()
+val autoVersionCode: Int = if (isReleaseBuild) {
+    if (!rootProject.extra.has("autoVersionCodeIncremented")) {
+        val nextCode = maxOf(storedCode + 1, flutter.versionCode + 1)
+        versionProps["versionCode"] = nextCode.toString()
+        versionProps.store(versionPropsFile.writer(), "Auto-incremented release version")
+
+        // Keep pubspec.yaml in sync
+        val pubspecFile = rootProject.file("../pubspec.yaml")
+        if (pubspecFile.exists()) {
+            val content = pubspecFile.readText()
+            val updated = content.replace(Regex("version:\\s*(\\d+\\.\\d+\\.\\d+)\\+\\d+")) { m ->
+                "version: ${m.groupValues[1]}+$nextCode"
+            }
+            pubspecFile.writeText(updated)
+        }
+        rootProject.extra.set("autoVersionCodeIncremented", nextCode)
+        println("🚀 [Auto-Version] Automatically incremented versionCode: $storedCode -> $nextCode")
+        nextCode
+    } else {
+        rootProject.extra.get("autoVersionCodeIncremented") as Int
+    }
+} else {
+    maxOf(storedCode, flutter.versionCode)
+}
+
 android {
     namespace = "com.telsoworld.app"
     compileSdk = flutter.compileSdkVersion
@@ -35,7 +75,7 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
+        versionCode = autoVersionCode
         versionName = flutter.versionName
     }
 
