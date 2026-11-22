@@ -28,17 +28,29 @@ function mapUser(row) {
   if (!row) return null;
   return {
     ...row,
+    reel_permission: row.reel_permission || 'auto',
     created_at: toIso(row.created_at),
   };
 }
 
 function mapVideo(row) {
   if (!row) return null;
+  const likedBy = Array.isArray(row.liked_by) ? row.liked_by : [];
+  const viewedBy = Array.isArray(row.viewed_by) ? row.viewed_by : [];
+  const realComments = row.real_comments_count !== undefined
+    ? parseInt(row.real_comments_count, 10)
+    : parseInt(row.comments_count || 0, 10);
+  const realLikes = likedBy.length > 0 ? likedBy.length : parseInt(row.likes_count || 0, 10);
+  const realViews = viewedBy.length > 0 ? viewedBy.length : parseInt(row.view_count || 0, 10);
+
   return {
     ...row,
     budget: row.budget !== null && row.budget !== undefined ? parseFloat(row.budget) : 0,
-    liked_by: Array.isArray(row.liked_by) ? row.liked_by : [],
-    viewed_by: Array.isArray(row.viewed_by) ? row.viewed_by : [],
+    liked_by: likedBy,
+    viewed_by: viewedBy,
+    likes_count: realLikes,
+    view_count: realViews,
+    comments_count: realComments,
     earned_like_users: Array.isArray(row.earned_like_users) ? row.earned_like_users : [],
     earned_comment_users: Array.isArray(row.earned_comment_users) ? row.earned_comment_users : [],
     created_at: toIso(row.created_at),
@@ -667,7 +679,7 @@ class PostgresDatabase {
   async updateUser(id, updates) {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) return null;
-    const allowed = ['name', 'username', 'mobile_no', 'bio', 'email', 'whatsapp', 'status', 'profile_image', 'state', 'district', 'password'];
+    const allowed = ['name', 'username', 'mobile_no', 'bio', 'email', 'whatsapp', 'status', 'profile_image', 'state', 'district', 'password', 'reel_permission'];
     const sets = [];
     const vals = [];
     let idx = 1;
@@ -727,7 +739,8 @@ class PostgresDatabase {
     if (limit) vals.push(limit);
 
     const { rows } = await this.pool.query(
-      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle
+      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle,
+              (SELECT COUNT(*)::int FROM comments c WHERE c.video_id = v.id) AS real_comments_count
        FROM videos v
        LEFT JOIN users u ON v.user_id = u.id
        ${whereSql}
@@ -751,7 +764,8 @@ class PostgresDatabase {
   async getUserVideos(userId) {
     const numericId = parseInt(userId, 10);
     const { rows } = await this.pool.query(
-      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle
+      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle,
+              (SELECT COUNT(*)::int FROM comments c WHERE c.video_id = v.id) AS real_comments_count
        FROM videos v
        LEFT JOIN users u ON v.user_id = u.id
        WHERE v.user_id = $1
@@ -765,7 +779,8 @@ class PostgresDatabase {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) return null;
     const { rows } = await this.pool.query(
-      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle
+      `SELECT v.*, u.profile_image AS user_profile_image, u.name AS user_name, u.username AS user_handle,
+              (SELECT COUNT(*)::int FROM comments c WHERE c.video_id = v.id) AS real_comments_count
        FROM videos v
        LEFT JOIN users u ON v.user_id = u.id
        WHERE v.id = $1

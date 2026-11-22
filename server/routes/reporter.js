@@ -642,19 +642,50 @@ router.post(
       const settings = (await db.getSettings()) || {};
       const platform = settings.platform || {};
 
+      // ── Admin Managed Upload Permissions Check ──
+      if (platform.allow_reel_upload === false) {
+        return res.status(403).json({
+          status: false,
+          message: 'Reel uploads are temporarily paused by administrator.',
+        });
+      }
+
+      if (user && user.status === 'banned') {
+        return res.status(403).json({
+          status: false,
+          message: 'Your account has been restricted. You cannot upload reels.',
+        });
+      }
+
+      if (user && user.reel_permission === 'blocked') {
+        return res.status(403).json({
+          status: false,
+          message: 'Reel upload permission has been restricted for your account by administrator.',
+        });
+      }
+
       let initialStatus = 'Approved';
       const isAd = videoType === 'ads';
       const isPhoto = photoFile || mediaType === 'photo';
       const isReel = !isPhoto && !isAd;
 
-      if (platform.auto_approve_all === false) {
+      if (user && user.reel_permission === 'allowed') {
+        // User has explicit permission from admin panel: goes live directly
+        initialStatus = 'Approved';
+      } else if (user && user.reel_permission === 'require_approval') {
+        // User was marked by admin to always require approval
         initialStatus = 'Pending';
-      } else if (isPhoto && platform.auto_approve_posts === false) {
-        initialStatus = 'Pending';
-      } else if (isReel && platform.auto_approve_reels === false) {
-        initialStatus = 'Pending';
-      } else if (isAd && platform.auto_approve_ads === false) {
-        initialStatus = 'Pending';
+      } else {
+        // Platform global rule
+        if (platform.require_admin_approval === true || platform.auto_approve_all === false) {
+          initialStatus = 'Pending';
+        } else if (isPhoto && platform.auto_approve_posts === false) {
+          initialStatus = 'Pending';
+        } else if (isReel && platform.auto_approve_reels === false) {
+          initialStatus = 'Pending';
+        } else if (isAd && platform.auto_approve_ads === false) {
+          initialStatus = 'Pending';
+        }
       }
 
       const newVideo = await db.createVideo({
@@ -679,10 +710,14 @@ router.post(
       });
 
       const responseVideo = formatVideoResponse(req, newVideo);
+      const isPending = initialStatus === 'Pending';
 
       return res.status(201).json({
         status: true,
-        message: 'Content uploaded successfully! Sent to Admin for review. ⏳',
+        status_code: initialStatus,
+        message: isPending
+          ? 'Reel submitted successfully! It is pending admin approval and will go live once reviewed. ⏳'
+          : 'Reel published successfully! It is now live on the feed. 🚀',
         video: responseVideo,
         data: responseVideo,
       });

@@ -343,6 +343,60 @@ router.put('/users/:id/status', adminRequired, async (req, res) => {
 });
 
 /**
+ * 🎬 PUT /api/admin/users/:id/reel-permission
+ * Update user reel upload permission: 'auto', 'allowed', 'require_approval', 'blocked'
+ */
+router.put('/users/:id/reel-permission', adminRequired, async (req, res) => {
+  const { reel_permission } = req.body;
+  if (!['auto', 'allowed', 'require_approval', 'blocked'].includes(reel_permission)) {
+    return res.status(422).json({
+      status: false,
+      message: 'reel_permission must be one of: auto, allowed, require_approval, blocked',
+    });
+  }
+  const updated = await db.updateUser(req.params.id, { reel_permission });
+  if (!updated) {
+    return res.status(404).json({ status: false, message: 'User not found' });
+  }
+  return res.status(200).json({
+    status: true,
+    message: `Reel upload permission updated to "${reel_permission}"`,
+    data: updated,
+  });
+});
+
+/**
+ * 🔄 POST /api/admin/sync-real-stats
+ * Synchronizes all videos' likes_count, view_count, and comments_count directly from real DB records
+ */
+router.post('/sync-real-stats', adminRequired, async (req, res) => {
+  try {
+    await db.pool.query(`
+      UPDATE videos v
+      SET comments_count = (SELECT COUNT(*)::int FROM comments c WHERE c.video_id = v.id)
+    `);
+    await db.pool.query(`
+      UPDATE videos v
+      SET likes_count = jsonb_array_length(
+        CASE WHEN jsonb_typeof(v.liked_by) = 'array' THEN v.liked_by ELSE '[]'::jsonb END
+      )
+    `);
+    await db.pool.query(`
+      UPDATE videos v
+      SET view_count = jsonb_array_length(
+        CASE WHEN jsonb_typeof(v.viewed_by) = 'array' THEN v.viewed_by ELSE '[]'::jsonb END
+      )
+    `);
+    return res.status(200).json({
+      status: true,
+      message: 'All videos synchronized with 100% real database stats. Dummy data cleared!',
+    });
+  } catch (err) {
+    return res.status(500).json({ status: false, message: `Sync failed: ${err.message}` });
+  }
+});
+
+/**
  * 💳 POST /api/admin/users/:id/wallet
  */
 router.post('/users/:id/wallet', adminRequired, async (req, res) => {

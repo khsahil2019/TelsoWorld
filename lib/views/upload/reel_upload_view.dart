@@ -322,18 +322,33 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
         final response = await http.Response.fromStream(streamed);
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
+          final resBody = jsonDecode(response.body);
+          final isPending = resBody['status_code'] == 'Pending' ||
+              resBody['video']?['status'] == 'Pending' ||
+              resBody['data']?['status'] == 'Pending';
+
           Get.snackbar(
-            'Shared Successfully! 🚀',
-            _activeMode == 'AD'
-                ? 'Your promotion reel was sent to the approval queue.'
-                : 'Your post is now uploaded to your profile & feed!',
+            isPending ? 'Submitted for Approval ⏳' : 'Shared Successfully! 🚀',
+            isPending
+                ? 'Your post was submitted and is awaiting admin approval before going live.'
+                : 'Your post is now published and live on the feed!',
             backgroundColor: const Color(0xFF161622),
-            colorText: const Color(0xFF10B981),
+            colorText: isPending ? const Color(0xFFFFB800) : const Color(0xFF10B981),
             snackPosition: SnackPosition.BOTTOM,
             duration: const Duration(seconds: 4),
           );
           _finishAndNavigate();
           return;
+        } else if (response.statusCode == 403) {
+          final errBody = jsonDecode(response.body);
+          Get.snackbar(
+            'Upload Not Permitted 🔒',
+            errBody['message'] ?? 'Admin permission is required to upload reels.',
+            backgroundColor: const Color(0xFF1E1E24),
+            colorText: const Color(0xFFFFB800),
+            snackPosition: SnackPosition.BOTTOM,
+            duration: const Duration(seconds: 4),
+          );
         } else {
           final errBody = jsonDecode(response.body);
           Get.snackbar('Upload Failed', errBody['message'] ?? 'Please try again',

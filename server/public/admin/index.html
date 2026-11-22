@@ -737,6 +737,29 @@
                 </label>
               </div>
 
+              <!-- Master Public Reel Upload Toggle -->
+              <div class="p-3 bg-brand-input/70 border border-brand-border rounded-xl flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-bold text-white">Allow Public Reel Uploads</p>
+                  <p class="text-[10px] text-slate-400">Master switch: when disabled, reel uploading is globally paused for all creators</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="ruleAllowReelUpload" class="sr-only peer" checked>
+                  <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+              </div>
+
+              <!-- Sync Real Database Stats (Clean Dummy Data) -->
+              <div class="p-3 bg-brand-input/70 border border-brand-border rounded-xl flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-bold text-white">1-Click Real Data Sync (No Dummy Data)</p>
+                  <p class="text-[10px] text-slate-400">Synchronizes all likes, views, and comments directly from live database tables & clears dummy numbers</p>
+                </div>
+                <button type="button" onclick="syncRealStats()" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition shadow">
+                  Sync Real Stats Now
+                </button>
+              </div>
+
               <!-- Birthday Wishing System -->
               <div class="p-3 bg-brand-input/70 border border-brand-border rounded-xl flex items-center justify-between">
                 <div>
@@ -1648,6 +1671,7 @@
               <th class="py-3 px-4 font-semibold">School / Academy</th>
               <th class="py-3 px-4 font-semibold">Referral Code</th>
               <th class="py-3 px-4 font-semibold">Wallet Balance</th>
+              <th class="py-3 px-4 font-semibold">Reel Upload Permission</th>
               <th class="py-3 px-4 font-semibold">Status</th>
               <th class="py-3 px-4 font-semibold text-right">Actions</th>
             </tr>
@@ -1678,6 +1702,15 @@
                 <td class="py-3 px-4 text-slate-300">${escapeHtml(u.school_name || '—')}</td>
                 <td class="py-3 px-4 font-mono text-amber-400 font-bold">${escapeHtml(u.referral_code || '—')}</td>
                 <td class="py-3 px-4 font-mono font-bold text-emerald-400">₹${u.wallet_balance || '0.00'}</td>
+                <td class="py-3 px-4">
+                  <select onchange="updateUserReelPermission(${u.id}, this.value)"
+                    class="bg-brand-input border border-brand-border rounded-lg px-2 py-1 text-[11px] font-semibold text-white focus:outline-none focus:border-brand-pink transition cursor-pointer">
+                    <option value="auto" ${(!u.reel_permission || u.reel_permission === 'auto') ? 'selected' : ''}>⚪ Default (Auto)</option>
+                    <option value="allowed" ${u.reel_permission === 'allowed' ? 'selected' : ''}>🟢 Direct Live</option>
+                    <option value="require_approval" ${u.reel_permission === 'require_approval' ? 'selected' : ''}>🟡 Needs Approval</option>
+                    <option value="blocked" ${u.reel_permission === 'blocked' ? 'selected' : ''}>🔴 Blocked</option>
+                  </select>
+                </td>
                 <td class="py-3 px-4">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">
                     ${u.status}
@@ -1716,6 +1749,51 @@
         loadUsers();
       } catch (err) {
         console.error(err);
+      }
+    }
+
+    async function updateUserReelPermission(id, permission) {
+      try {
+        const res = await fetch(`/api/admin/users/${id}/reel-permission`, {
+          method: 'PUT',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reel_permission: permission }),
+        });
+        const data = await res.json();
+        if (data.status) {
+          const alertBox = document.getElementById('settingsAlertBox');
+          if (alertBox) {
+            alertBox.className = 'p-3 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+            alertBox.textContent = data.message || 'Permission updated successfully!';
+            alertBox.classList.remove('hidden');
+            setTimeout(() => alertBox.classList.add('hidden'), 3500);
+          }
+        } else {
+          alert(data.message || 'Failed to update reel permission');
+        }
+      } catch (err) {
+        console.error('Permission update failed:', err);
+        alert('Network error updating reel permission: ' + err.message);
+      }
+    }
+
+    async function syncRealStats() {
+      if (!confirm('Sync all video likes, views, and comments directly from live database tables? Any dummy counts will be purged.')) return;
+      try {
+        const res = await fetch('/api/admin/sync-real-stats', {
+          method: 'POST',
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (data.status) {
+          alert('✅ ' + data.message);
+          if (typeof loadVideos === 'function') loadVideos();
+          if (typeof loadDashboardStats === 'function') loadDashboardStats();
+        } else {
+          alert('❌ ' + (data.message || 'Sync failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
       }
     }
 
@@ -1962,6 +2040,9 @@
           if (p.min_withdrawal !== undefined) document.getElementById('ruleMinWithdrawal').value = p.min_withdrawal;
           if (p.max_upload_size_mb !== undefined) document.getElementById('ruleMaxUploadSize').value = p.max_upload_size_mb;
           document.getElementById('ruleRequireApproval').checked = p.require_admin_approval !== false;
+          if (document.getElementById('ruleAllowReelUpload')) {
+            document.getElementById('ruleAllowReelUpload').checked = p.allow_reel_upload !== false;
+          }
           document.getElementById('ruleBirthdayWishing').checked = p.birthday_wishing_enabled !== false;
         }
       } catch (err) {
@@ -2015,6 +2096,7 @@
           min_withdrawal: parseFloat(document.getElementById('ruleMinWithdrawal').value) || 100.0,
           max_upload_size_mb: parseInt(document.getElementById('ruleMaxUploadSize').value, 10) || 250,
           require_admin_approval: document.getElementById('ruleRequireApproval').checked,
+          allow_reel_upload: document.getElementById('ruleAllowReelUpload') ? document.getElementById('ruleAllowReelUpload').checked : true,
           birthday_wishing_enabled: document.getElementById('ruleBirthdayWishing').checked,
         },
       };

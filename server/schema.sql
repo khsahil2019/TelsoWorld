@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS users (
   status TEXT DEFAULT 'active',
   profile_image TEXT DEFAULT '',
   bio TEXT DEFAULT '',
+  reel_permission TEXT DEFAULT 'auto',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

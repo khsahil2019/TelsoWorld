@@ -78,6 +78,8 @@ class VideoItem {
   final String audioTitle;
   final int likesCount;
   final int sharesCount;
+  final int viewCount;
+  final int commentsCount;
 
   /// API: `"normal"` | `"ads"` (dashboard `video_type`).
   final String videoType;
@@ -99,6 +101,8 @@ class VideoItem {
     this.audioTitle = '',
     required this.likesCount,
     required this.sharesCount,
+    this.viewCount = 0,
+    this.commentsCount = 0,
     required this.videoType,
     required this.liked,
   });
@@ -159,6 +163,8 @@ class VideoItem {
       audioTitle: json['audio_title']?.toString() ?? '',
       likesCount: _toInt(json['likes_count']),
       sharesCount: _toInt(json['shares_count']),
+      viewCount: _toInt(json['view_count'] ?? json['views_count']),
+      commentsCount: _toInt(json['comments_count']),
       videoType: json['video_type']?.toString() ?? 'normal',
       liked: _toBool(json['liked'] ?? json['is_liked']),
     );
@@ -663,12 +669,16 @@ class _VideoPageState extends State<_VideoPage>
   bool _isLiking = false;
   bool _isMuted = false;
   int _likesCount = 0;
+  int _commentsCount = 0;
+  int _viewCount = 0;
   int _heartAnimationRun = 0;
 
   @override
   void initState() {
     super.initState();
     _likesCount = widget.video.likesCount;
+    _commentsCount = widget.video.commentsCount;
+    _viewCount = widget.video.viewCount;
     _isLiked = widget.video.liked;
     _heartController = AnimationController(
       vsync: this,
@@ -839,7 +849,7 @@ class _VideoPageState extends State<_VideoPage>
       final endpoint = _isAdsVideo
           ? '${ApiEndpoints.baseUrl}/reporter/adsvideo/view'
           : '${ApiEndpoints.baseUrl}/reporter/normal-video/view';
-      await http
+      final response = await http
           .post(
             Uri.parse(endpoint),
             headers: {
@@ -850,6 +860,15 @@ class _VideoPageState extends State<_VideoPage>
             body: jsonEncode({'video_id': widget.video.id}),
           )
           .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200 && mounted) {
+        final Map<String, dynamic> json =
+            jsonDecode(response.body) as Map<String, dynamic>;
+        final newViews = (json['views_count'] as num?)?.toInt();
+        if (newViews != null && newViews > 0) {
+          setState(() => _viewCount = newViews);
+        }
+      }
     } catch (_) {
       // View tracking is best-effort; do not disrupt playback on failure.
     }
@@ -991,9 +1010,20 @@ class _VideoPageState extends State<_VideoPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) =>
-          _CommentsBottomSheet(videoId: widget.video.id, videoType: type),
+      builder: (_) => _CommentsBottomSheet(
+        videoId: widget.video.id,
+        videoType: type,
+        onCommentAdded: () {
+          if (mounted) setState(() => _commentsCount++);
+        },
+      ),
     );
+  }
+
+  String _fmt(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return '$count';
   }
 
   bool get _isSelfVideo {
@@ -1399,6 +1429,28 @@ class _VideoPageState extends State<_VideoPage>
                       size: 24,
                     ),
                   ),
+                  if (_viewCount > 0) ...[
+                    const SizedBox(width: 14),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.visibility_outlined,
+                          color: Colors.white54,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _fmt(_viewCount),
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const Spacer(),
                   if (widget.video.mediaType != 'photo')
                     GestureDetector(
@@ -1456,9 +1508,11 @@ class _VideoPageState extends State<_VideoPage>
               const SizedBox(height: 4),
               GestureDetector(
                 onTap: _openCommentsSheet,
-                child: const Text(
-                  'View all comments',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                child: Text(
+                  _commentsCount > 0
+                      ? 'View all $_commentsCount comments'
+                      : 'View comments',
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
                 ),
               ),
               const SizedBox(height: 4),
@@ -1650,6 +1704,7 @@ class _VideoPageState extends State<_VideoPage>
                 isLiked: _isLiked,
                 likesCount: _likesCount,
                 sharesCount: widget.video.sharesCount,
+                commentsCount: _commentsCount,
                 videoTitle: widget.video.subject,
                 videoId: widget.video.id,
                 profileImage: effectiveAvatar,
@@ -1966,6 +2021,7 @@ class _RightActions extends StatefulWidget {
   final bool isLiked;
   final int likesCount;
   final int sharesCount;
+  final int commentsCount;
   final String videoTitle;
   final int videoId;
   final String profileImage;
@@ -1977,6 +2033,7 @@ class _RightActions extends StatefulWidget {
     required this.isLiked,
     required this.likesCount,
     required this.sharesCount,
+    this.commentsCount = 0,
     this.videoTitle = 'Telso Reel',
     this.videoId = 0,
     this.profileImage = '',
@@ -2080,9 +2137,9 @@ class _RightActionsState extends State<_RightActions>
         // Comment
         GestureDetector(
           onTap: widget.onCommentTap,
-          child: const _ActionButton(
+          child: _ActionButton(
             icon: Icons.chat_bubble_outline_rounded,
-            label: 'Comment',
+            label: widget.commentsCount > 0 ? _fmt(widget.commentsCount) : 'Comment',
           ),
         ),
         const SizedBox(height: 18),
@@ -2269,8 +2326,13 @@ class _SpinningDiscState extends State<_SpinningDisc>
 class _CommentsBottomSheet extends StatefulWidget {
   final int videoId;
   final String videoType; // normal | ads
+  final VoidCallback? onCommentAdded;
 
-  const _CommentsBottomSheet({required this.videoId, required this.videoType});
+  const _CommentsBottomSheet({
+    required this.videoId,
+    required this.videoType,
+    this.onCommentAdded,
+  });
 
   @override
   State<_CommentsBottomSheet> createState() => _CommentsBottomSheetState();
@@ -2412,6 +2474,7 @@ class _CommentsBottomSheetState extends State<_CommentsBottomSheet> {
       if (!mounted) return;
       _commentCtrl.clear();
       _commentFocus.unfocus();
+      widget.onCommentAdded?.call();
 
       // Refresh from server so list stays accurate with backend ordering/user.
       await _loadComments(page: 1, reset: true);
