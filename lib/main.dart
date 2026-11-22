@@ -15,13 +15,18 @@ void main() async {
 }
 
 class TelsoWorldRootApp extends StatelessWidget {
-  final ThemeService themeService;
-  const TelsoWorldRootApp({super.key, required this.themeService});
+  final ThemeService? themeService;
+  const TelsoWorldRootApp({super.key, this.themeService});
 
   @override
   Widget build(BuildContext context) {
+    final ThemeService theme = themeService ??
+        (Get.isRegistered<ThemeService>()
+            ? Get.find<ThemeService>()
+            : Get.put<ThemeService>(ThemeService()));
+
     return Obx(() {
-      final isDark = themeService.isDarkMode.value;
+      final isDark = theme.isDarkMode.value;
       return GetMaterialApp(
         title: 'Telso World',
         debugShowCheckedModeBanner: false,
