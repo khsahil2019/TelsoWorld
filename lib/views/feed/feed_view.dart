@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:telsoworld/controllers/main_nav_controller.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
@@ -1894,23 +1895,15 @@ class _TopBar extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(7),
-                  child: Image.asset(
-                    'assets/icons/app_icon.png',
-                    width: 30,
-                    height: 30,
-                    fit: BoxFit.cover,
-                  ),
-                ),
                 const SizedBox(width: 8),
-                const Text(
+
+                Text(
                   'Telso World',
-                  style: TextStyle(
+                  style: GoogleFonts.lobster(
                     color: Colors.white,
                     fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.2,
                   ),
                 ),
               ],

@@ -66,6 +66,7 @@ dependencies:
   dio: ^5.9.2
   video_editor: ^3.0.0
   ffmpeg_kit_flutter_new_min_gpl: ^2.1.1
+  google_fonts: ^8.2.1
 
 dev_dependencies:
   flutter_test:
