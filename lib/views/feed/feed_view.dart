@@ -1062,26 +1062,6 @@ class _VideoPageState extends State<_VideoPage>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 17,
-                backgroundColor: const Color(0xFF23232E),
-                backgroundImage: widget.video.userProfileImage.isNotEmpty
-                    ? NetworkImage(widget.video.userProfileImage)
-                    : null,
-                child: widget.video.userProfileImage.isEmpty
-                    ? Text(
-                        (widget.video.username.isNotEmpty
-                                ? widget.video.username
-                                : widget.video.name)[0]
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      )
-                    : null,
-              ),
               Obx(() {
                 final storage = Get.isRegistered<StorageService>()
                     ? Get.find<StorageService>()
@@ -2139,7 +2119,9 @@ class _RightActionsState extends State<_RightActions>
           onTap: widget.onCommentTap,
           child: _ActionButton(
             icon: Icons.chat_bubble_outline_rounded,
-            label: widget.commentsCount > 0 ? _fmt(widget.commentsCount) : 'Comment',
+            label: widget.commentsCount > 0
+                ? _fmt(widget.commentsCount)
+                : 'Comment',
           ),
         ),
         const SizedBox(height: 18),
