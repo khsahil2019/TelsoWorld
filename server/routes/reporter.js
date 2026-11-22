@@ -735,15 +735,51 @@ router.post(
  * 💰 GET /api/reporter/wallet
  */
 router.get('/wallet', authOptional, async (req, res) => {
-  const userId = req.user ? req.user.id : 3; // Default to user 3 (Telso Star Creator) if guest
+  const userId = req.user ? req.user.id : (req.query.user_id ? parseInt(req.query.user_id, 10) : 8);
   const walletData = await db.getWallet(userId);
 
   return res.status(200).json({
     status: true,
     balance: walletData.balance,
     total_balance: walletData.total_balance,
+    total_credit: walletData.total_credit,
+    total_debit: walletData.total_debit,
     pending_amount: walletData.pending_amount,
     transactions: walletData.transactions,
+  });
+});
+
+/**
+ * 💸 POST /api/reporter/withdraw
+ * Submit UPI or Bank Account withdrawal request
+ */
+router.post('/withdraw', authOptional, async (req, res) => {
+  try {
+    const userId = req.user ? req.user.id : (req.body.user_id ? parseInt(req.body.user_id, 10) : 8);
+    const result = await db.createWithdrawal(userId, req.body);
+    return res.status(200).json({
+      status: true,
+      message: 'Withdrawal request submitted successfully!',
+      withdrawal: result,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      status: false,
+      message: err.message || 'Failed to submit withdrawal request',
+    });
+  }
+});
+
+/**
+ * 📜 GET /api/reporter/withdrawals
+ * Get past withdrawal requests history
+ */
+router.get('/withdrawals', authOptional, async (req, res) => {
+  const userId = req.user ? req.user.id : (req.query.user_id ? parseInt(req.query.user_id, 10) : 8);
+  const list = await db.getWithdrawals(userId);
+  return res.status(200).json({
+    status: true,
+    withdrawals: list,
   });
 });
 

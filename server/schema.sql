@@ -208,6 +208,10 @@ CREATE TABLE IF NOT EXISTS blocks (
 
 ALTER TABLE videos ADD COLUMN IF NOT EXISTS media_type TEXT NOT NULL DEFAULT 'video';
 ALTER TABLE videos ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT '';
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS payout_method TEXT DEFAULT 'upi';
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT '';
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS account_number TEXT DEFAULT '';
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS ifsc_code TEXT DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_stories_user_expires ON stories(user_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_conversations_users ON conversations(user1_id, user2_id);

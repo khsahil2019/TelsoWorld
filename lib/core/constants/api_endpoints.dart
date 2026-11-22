@@ -107,6 +107,9 @@ class ApiEndpoints {
   // Wallet & Referral
   static const String wallet = '/reporter/wallet';
   static const String referral = '/reporter/referral';
+  static const String referralNetwork = '/reporter/referral-network';
+  static const String withdraw = '/reporter/withdraw';
+  static const String withdrawals = '/reporter/withdrawals';
 
   // Profile & Creator
   static const String profile = '/reporter/profile';

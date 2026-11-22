@@ -15,6 +15,9 @@ import 'package:telsoworld/views/profile/profile_reels_viewer_screen.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
 import 'package:telsoworld/views/upload/uploaded_video_view.dart';
 import 'package:telsoworld/views/wallet/wallet_view.dart';
+import 'package:telsoworld/views/wallet/withdraw_view.dart';
+import 'package:telsoworld/views/referral/referral_view.dart';
+import 'package:telsoworld/core/services/theme_service.dart';
 import 'package:telsoworld/views/web_link/updated_web_link_view.dart';
 
 /// ---------------------------------------------------------------------------
@@ -439,16 +442,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       letterSpacing: 0.5,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.menu_rounded,
-                      color: Colors.white,
-                      size: 26,
-                    ),
-                    tooltip: 'Creator Menu & Wallet',
-                    onPressed: () {
-                      _scaffoldKey.currentState?.openEndDrawer();
-                    },
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Theme Toggle (☀️/🌙)
+                      Obx(() {
+                        final themeService = Get.isRegistered<ThemeService>()
+                            ? Get.find<ThemeService>()
+                            : null;
+                        final isDark = themeService?.isDarkMode.value ?? true;
+                        return IconButton(
+                          icon: Icon(
+                            isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                            color: isDark ? const Color(0xFFFFD54F) : const Color(0xFF5E17EB),
+                            size: 22,
+                          ),
+                          tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                          onPressed: () => themeService?.toggleTheme(),
+                        );
+                      }),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.menu_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                        tooltip: 'Creator Menu & Wallet',
+                        onPressed: () {
+                          _scaffoldKey.currentState?.openEndDrawer();
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1239,12 +1263,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Navigator.of(context)
                           .push(
                             MaterialPageRoute<void>(
-                              builder: (_) => const WalletScreen(initialTabIndex: 1),
+                              builder: (_) => const ReferralScreen(),
                             ),
                           )
                           .then((_) => _loadProfileData());
                     },
                   ),
+                  _buildDrawerTile(
+                    icon: Icons.payments_rounded,
+                    iconColor: const Color(0xFF00E676),
+                    title: 'Withdraw Funds',
+                    subtitle: 'Direct Bank Account / Instant UPI transfer',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      final bal = double.tryParse(
+                            _walletBalance
+                                .replaceAll('₹', '')
+                                .replaceAll(',', '')
+                                .trim(),
+                          ) ??
+                          0.0;
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => WithdrawScreen(
+                                currentBalance: bal,
+                                onWithdrawSuccess: _loadProfileData,
+                              ),
+                            ),
+                          )
+                          .then((_) => _loadProfileData());
+                    },
+                  ),
+                  Obx(() {
+                    final themeService = Get.isRegistered<ThemeService>()
+                        ? Get.find<ThemeService>()
+                        : null;
+                    final isDark = themeService?.isDarkMode.value ?? true;
+                    return _buildDrawerTile(
+                      icon: isDark
+                          ? Icons.light_mode_rounded
+                          : Icons.dark_mode_rounded,
+                      iconColor: isDark
+                          ? const Color(0xFFFFD54F)
+                          : const Color(0xFF5E17EB),
+                      title: isDark ? 'Light Mode' : 'Dark Mode',
+                      subtitle: isDark
+                          ? 'Switch to daylight interface'
+                          : 'Switch to night interface',
+                      onTap: () => themeService?.toggleTheme(),
+                    );
+                  }),
                 ],
               ),
             ),

@@ -1343,14 +1343,129 @@ class PostgresDatabase {
       'SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC',
       [uId]
     );
-    const bal = parseFloat(wallet.balance || 0);
+
+    // Calculate exact totals from transactions
+    let totalCredit = 0.0;
+    let totalDebit = 0.0;
+    for (const tx of txRows) {
+      const amt = parseFloat(tx.amount || 0);
+      if (tx.type === 'debit') {
+        totalDebit += amt;
+      } else {
+        totalCredit += amt;
+      }
+    }
+
+    // Exact balance: if transactions exist, match exact sum of transactions; otherwise keep wallet.balance
+    let exactBalance = parseFloat(wallet.balance || 0);
+    if (txRows.length > 0) {
+      exactBalance = Math.max(0, parseFloat((totalCredit - totalDebit).toFixed(2)));
+      if (Math.abs(exactBalance - parseFloat(wallet.balance || 0)) > 0.001) {
+        await this.pool.query('UPDATE wallets SET balance = $1 WHERE user_id = $2', [exactBalance, uId]);
+      }
+    } else {
+      totalCredit = exactBalance;
+    }
+
     const pend = parseFloat(wallet.pending_amount || 0);
     return {
-      balance: bal.toFixed(2),
-      total_balance: bal.toFixed(2),
+      balance: exactBalance.toFixed(2),
+      total_balance: exactBalance.toFixed(2),
+      total_credit: totalCredit.toFixed(2),
+      total_debit: totalDebit.toFixed(2),
       pending_amount: pend.toFixed(2),
       transactions: txRows.map(mapTransaction),
     };
+  }
+
+  async createWithdrawal(userId, data) {
+    const uId = parseInt(userId, 10);
+    const amount = parseFloat(data.amount);
+    if (isNaN(amount) || amount < 100) {
+      throw new Error('Minimum withdrawal amount is ₹100.00');
+    }
+    const method = (data.payout_method || 'upi').toLowerCase();
+    const upiId = (data.upi_id || '').trim();
+    const accountHolder = (data.account_holder || '').trim();
+    const bankName = (data.bank_name || '').trim();
+    const accountNumber = (data.account_number || '').trim();
+    const ifscCode = (data.ifsc_code || '').trim().toUpperCase();
+
+    if (method === 'upi' && (!upiId || !upiId.includes('@'))) {
+      throw new Error('Please enter a valid UPI ID (e.g. mobile@upi)');
+    }
+    if (method === 'bank' && (!accountNumber || !ifscCode)) {
+      throw new Error('Please enter Bank Account Number and IFSC Code');
+    }
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: wRows } = await client.query('SELECT * FROM wallets WHERE user_id = $1 FOR UPDATE', [uId]);
+      const currentBalance = parseFloat((wRows[0] && wRows[0].balance) || 0);
+      if (currentBalance < amount) {
+        await client.query('ROLLBACK');
+        throw new Error(`Insufficient wallet balance. Available: ₹${currentBalance.toFixed(2)}`);
+      }
+
+      // Deduct from balance, add to pending_amount
+      await client.query(
+        'UPDATE wallets SET balance = balance - $1, pending_amount = pending_amount + $1 WHERE user_id = $2',
+        [amount, uId]
+      );
+
+      const user = await this.findUserById(uId);
+      const userName = user ? (user.name || user.username) : `User #${uId}`;
+      const wdrId = `wdr_${Date.now()}_${uId}`;
+
+      const desc = method === 'upi'
+        ? `Payout request of ₹${amount.toFixed(2)} via UPI (${upiId})`
+        : `Payout request of ₹${amount.toFixed(2)} via Bank (${bankName || 'Direct Account'}, A/C: ${accountNumber}, IFSC: ${ifscCode})`;
+
+      // Record pending debit transaction
+      await client.query(
+        `INSERT INTO transactions (id, user_id, title, description, amount, type, status)
+         VALUES ($1, $2, $3, $4, $5, 'debit', 'pending')`,
+        [`tx_${wdrId}`, uId, `Withdrawal (${method.toUpperCase()})`, desc, amount]
+      );
+
+      // Record withdrawal request
+      const { rows: insertedWdr } = await client.query(
+        `INSERT INTO withdrawals (id, user_id, user_name, amount, upi_id, account_holder, payout_method, bank_name, account_number, ifsc_code, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
+         RETURNING *`,
+        [wdrId, uId, userName, amount, upiId, accountHolder, method, bankName, accountNumber, ifscCode]
+      );
+
+      await client.query('COMMIT');
+
+      // Notify user
+      await this.addUserNotification(uId, {
+        title: 'Withdrawal Initiated ⏳',
+        message: `Your withdrawal of ₹${amount.toFixed(2)} has been submitted for instant processing.`,
+        type: 'payout',
+      });
+
+      return insertedWdr[0];
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getWithdrawals(userId) {
+    const uId = parseInt(userId, 10);
+    const { rows } = await this.pool.query(
+      'SELECT * FROM withdrawals WHERE user_id = $1 ORDER BY created_at DESC',
+      [uId]
+    );
+    return rows.map(r => ({
+      ...r,
+      amount: parseFloat(r.amount || 0).toFixed(2),
+      created_at: toIso(r.created_at),
+    }));
   }
 
   async addWalletTransaction(userId, { title, description, amount, type = 'credit' }) {
