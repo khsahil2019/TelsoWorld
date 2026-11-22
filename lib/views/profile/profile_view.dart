@@ -1229,6 +1229,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           .then((_) => _loadProfileData());
                     },
                   ),
+                  _buildDrawerTile(
+                    icon: Icons.hub_rounded,
+                    iconColor: const Color(0xFFFFD54F),
+                    title: '5-Level Referral Network',
+                    subtitle: 'Downline team, members & ₹0.05 rewards',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const WalletScreen(initialTabIndex: 1),
+                            ),
+                          )
+                          .then((_) => _loadProfileData());
+                    },
+                  ),
                 ],
               ),
             ),

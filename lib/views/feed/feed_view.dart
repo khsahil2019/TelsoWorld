@@ -17,6 +17,7 @@ import 'package:telsoworld/views/notifications/notifications_view.dart';
 import 'package:telsoworld/views/upload/reel_upload_view.dart';
 import 'package:telsoworld/core/services/session_token_store.dart';
 import 'package:telsoworld/core/services/storage_service.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
@@ -81,6 +82,7 @@ class VideoItem {
   final int sharesCount;
   final int viewCount;
   final int commentsCount;
+  final String createdAt;
 
   /// API: `"normal"` | `"ads"` (dashboard `video_type`).
   final String videoType;
@@ -104,6 +106,7 @@ class VideoItem {
     required this.sharesCount,
     this.viewCount = 0,
     this.commentsCount = 0,
+    this.createdAt = '',
     required this.videoType,
     required this.liked,
   });
@@ -166,6 +169,7 @@ class VideoItem {
       sharesCount: _toInt(json['shares_count']),
       viewCount: _toInt(json['view_count'] ?? json['views_count']),
       commentsCount: _toInt(json['comments_count']),
+      createdAt: json['created_at']?.toString() ?? '',
       videoType: json['video_type']?.toString() ?? 'normal',
       liked: _toBool(json['liked'] ?? json['is_liked']),
     );
@@ -951,6 +955,24 @@ class _VideoPageState extends State<_VideoPage>
 
       if (animateHeart && _isLiked) await _runHeartAnimation();
 
+      if (json['reward_info'] != null && json['reward_info'] is Map) {
+        final reward = json['reward_info']['reward'];
+        final numVal = (reward is num)
+            ? reward.toDouble()
+            : double.tryParse(reward?.toString() ?? '0') ?? 0.0;
+        if (numVal > 0) {
+          Get.snackbar(
+            '🎉 ₹0.10 Credited!',
+            'You earned ₹0.10 for liking this sponsored Ad Reel. Uplines rewarded!',
+            backgroundColor: const Color(0xFF1E1E24),
+            colorText: const Color(0xFF00E676),
+            icon: const Icon(Icons.monetization_on_rounded, color: Color(0xFF00E676)),
+            duration: const Duration(seconds: 4),
+            snackPosition: SnackPosition.TOP,
+          );
+        }
+      }
+
       // Keep UI always in sync with server-side likes.
       await widget.onLikeSync();
     } catch (e, st) {
@@ -1027,6 +1049,22 @@ class _VideoPageState extends State<_VideoPage>
     return '$count';
   }
 
+  String _formatTimestamp(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(isoString).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inSeconds < 60) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+      if (diff.inHours < 24) return '${diff.inHours}h';
+      if (diff.inDays < 7) return '${diff.inDays}d';
+      if (diff.inDays < 30) return '${(diff.inDays / 7).floor()}w';
+      return DateFormat('d MMM').format(dt);
+    } catch (_) {
+      return '';
+    }
+  }
+
   bool get _isSelfVideo {
     final storage = Get.isRegistered<StorageService>()
         ? Get.find<StorageService>()
@@ -1101,14 +1139,17 @@ class _VideoPageState extends State<_VideoPage>
                   children: [
                     Row(
                       children: [
-                        Text(
-                          widget.video.username.isNotEmpty
-                              ? widget.video.username
-                              : widget.video.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                        Flexible(
+                          child: Text(
+                            widget.video.username.isNotEmpty
+                                ? widget.video.username
+                                : widget.video.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -1117,6 +1158,42 @@ class _VideoPageState extends State<_VideoPage>
                           color: Color(0xFF3897F0),
                           size: 13,
                         ),
+                        if (_formatTimestamp(widget.video.createdAt).isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            '• ${_formatTimestamp(widget.video.createdAt)}',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                        if (_isAdsVideo) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFB300).withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: const Color(0xFFFFB300),
+                                width: 0.7,
+                              ),
+                            ),
+                            child: const Text(
+                              'AD • Earn ₹0.10',
+                              style: TextStyle(
+                                color: Color(0xFFFFB300),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -3333,6 +3410,22 @@ class _RepliesBottomSheetState extends State<_RepliesBottomSheet> {
 // ─────────────────────────────────────────
 // Bottom Info  (subject + creator name)
 // ─────────────────────────────────────────
+String _formatVideoTimestamp(String? isoString) {
+  if (isoString == null || isoString.isEmpty) return '';
+  try {
+    final dt = DateTime.parse(isoString).toLocal();
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()}w';
+    return DateFormat('d MMM').format(dt);
+  } catch (_) {
+    return '';
+  }
+}
+
 class _BottomInfo extends StatelessWidget {
   final VideoItem video;
   const _BottomInfo({required this.video});
@@ -3340,22 +3433,27 @@ class _BottomInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final creatorName = video.name.isNotEmpty ? video.name : 'telso_creator';
+    final isAd = video.videoType.toLowerCase().trim() == 'ads';
+    final formattedTime = _formatVideoTimestamp(video.createdAt);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Creator Handle + Verified Badge
+        // Creator Handle + Verified Badge + Timestamp + Ad Badge
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              '@$creatorName',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                shadows: [Shadow(blurRadius: 8, color: Colors.black87)],
+            Flexible(
+              child: Text(
+                '@$creatorName',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  shadows: [Shadow(blurRadius: 8, color: Colors.black87)],
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 6),
@@ -3367,6 +3465,56 @@ class _BottomInfo extends StatelessWidget {
               ),
               child: const Icon(Icons.check, color: Colors.white, size: 10),
             ),
+            if (formattedTime.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text(
+                '• $formattedTime',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  shadows: [Shadow(blurRadius: 8, color: Colors.black87)],
+                ),
+              ),
+            ],
+            if (isAd) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFFB300), Color(0xFFFF6D00)],
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black45,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.monetization_on_rounded,
+                      color: Colors.white,
+                      size: 12,
+                    ),
+                    SizedBox(width: 3),
+                    Text(
+                      'AD • ₹0.10',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 6),

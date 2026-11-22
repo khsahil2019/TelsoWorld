@@ -749,10 +749,12 @@ router.get('/wallet', authOptional, async (req, res) => {
 
 /**
  * 🔗 GET /api/reporter/referral
+ * 👥 GET /api/reporter/referral-network
+ * Returns 5-Level Referral Network, members, and real-time earnings
  */
-router.get('/referral', authOptional, async (req, res) => {
-  const userId = req.user ? req.user.id : 3;
-  const refData = await db.getReferral(userId, req.get('host'));
+router.get(['/referral', '/referral-network'], authOptional, async (req, res) => {
+  const userId = req.user ? req.user.id : (req.query.user_id ? parseInt(req.query.user_id, 10) : 8);
+  const refData = await db.getReferralNetwork(userId, req.get('host'));
 
   if (!refData) {
     return res.status(404).json({ status: false, message: 'User not found' });

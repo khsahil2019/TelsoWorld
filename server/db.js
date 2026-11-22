@@ -898,6 +898,45 @@ class PostgresDatabase {
     }
   }
 
+  // --- 5-Level Referral Upline Chain ---
+  async getUplineChain(userId, maxLevels = 5) {
+    const chain = [];
+    let currentId = parseInt(userId, 10);
+    if (isNaN(currentId)) return chain;
+    const visited = new Set([currentId]);
+
+    for (let level = 1; level <= maxLevels; level++) {
+      const { rows: currRows } = await this.pool.query(
+        'SELECT id, name, username, referral_code, referred_by FROM users WHERE id = $1 LIMIT 1',
+        [currentId]
+      );
+      if (!currRows[0] || !currRows[0].referred_by) break;
+
+      const refCode = String(currRows[0].referred_by).trim();
+      if (!refCode) break;
+
+      const { rows: uplineRows } = await this.pool.query(
+        'SELECT id, name, username, referral_code, referred_by, profile_image FROM users WHERE UPPER(referral_code) = UPPER($1) OR id::text = $1 LIMIT 1',
+        [refCode]
+      );
+      if (!uplineRows[0]) break;
+      const upline = uplineRows[0];
+      if (visited.has(upline.id)) break; // loop prevention
+
+      visited.add(upline.id);
+      chain.push({
+        level,
+        user_id: upline.id,
+        name: upline.name || upline.username || `User #${upline.id}`,
+        username: upline.username || '',
+        profile_image: upline.profile_image || '',
+        referral_code: upline.referral_code || '',
+      });
+      currentId = upline.id;
+    }
+    return chain;
+  }
+
   // --- 5-Layer Engagement Reward Calculator ---
   calculateLayerReward(actionType, currentActionCount) {
     const position = currentActionCount + 1;
@@ -940,35 +979,76 @@ class PostgresDatabase {
         liked = true;
         if (video.user_id && video.user_id !== uId) notifyOwner = true;
 
-        if (uId && (video.video_type === 'ads' || video.category === 'Promotion') && !earnedLikeUsers.includes(uId)) {
+        const isAd = video.video_type === 'ads' || video.category === 'Promotion' || video.is_ad === true;
+        if (uId && isAd && !earnedLikeUsers.includes(uId)) {
           earnedLikeUsers.push(uId);
-          const layerData = this.calculateLayerReward('like', earnedLikeUsers.length - 1);
-          if (layerData.reward > 0) {
-            const { rows: wRows } = await client.query(
+          const selfReward = 0.10; // ₹0.10 (10 paise) for liking user (Self)
+
+          // 1. Credit Self Wallet (₹0.10)
+          const { rows: wRows } = await client.query(
+            `INSERT INTO wallets (user_id, balance, pending_amount)
+             VALUES ($1, $2, 0)
+             ON CONFLICT (user_id) DO UPDATE SET balance = wallets.balance + $2
+             RETURNING balance`,
+            [uId, selfReward]
+          );
+
+          await client.query(
+            `INSERT INTO transactions (id, user_id, title, description, amount, type, status)
+             VALUES ($1, $2, $3, $4, $5, 'credit', 'completed')`,
+            [
+              `tx_adlike_${Date.now()}_${uId}`,
+              uId,
+              'Ad Reel Reward (Self) 💰',
+              `Earned ₹0.10 for liking Ad Reel "${video.title}" [Reel #${video.id}]`,
+              selfReward,
+            ]
+          );
+
+          // 2. Distribute to Uplines up to 5 Levels (₹0.05 each)
+          const uplines = await this.getUplineChain(uId, 5);
+          const likingUser = await this.findUserById(uId);
+          const likingName = likingUser ? (likingUser.username || likingUser.name) : `User #${uId}`;
+
+          for (const upline of uplines) {
+            const uplineReward = 0.05; // ₹0.05 (5 paise) for each upline level (1 to 5)
+            await client.query(
               `INSERT INTO wallets (user_id, balance, pending_amount)
                VALUES ($1, $2, 0)
-               ON CONFLICT (user_id) DO UPDATE SET balance = wallets.balance + $2
-               RETURNING balance`,
-              [uId, layerData.reward]
+               ON CONFLICT (user_id) DO UPDATE SET balance = wallets.balance + $2`,
+              [upline.user_id, uplineReward]
             );
+
             await client.query(
               `INSERT INTO transactions (id, user_id, title, description, amount, type, status)
                VALUES ($1, $2, $3, $4, $5, 'credit', 'completed')`,
               [
-                `tx_${Date.now()}_like_${uId}`,
-                uId,
-                `Ad Like Reward: ${layerData.label}`,
-                `Earned ₹${layerData.reward.toFixed(2)} for liking sponsored post "${video.title}"`,
-                layerData.reward,
+                `tx_ref_l${upline.level}_${Date.now()}_${upline.user_id}`,
+                upline.user_id,
+                `Referral Ad Reward (Level ${upline.level}) 👥`,
+                `+₹0.05 from Level ${upline.level} referral @${likingName} [User #${uId}] liking Ad Reel "${video.title}"`,
+                uplineReward,
               ]
             );
-            rewardInfo = {
-              reward: layerData.reward,
-              layer: layerData.layer,
-              label: layerData.label,
-              new_balance: parseFloat(wRows[0].balance).toFixed(2),
-            };
+
+            // Notify upline
+            await this.addUserNotification(upline.user_id, {
+              title: `+₹0.05 Referral Reward! 👥`,
+              message: `@${likingName} (Level ${upline.level}) liked an Ad Reel! ₹0.05 added to your wallet.`,
+              type: 'earning',
+              avatar: likingUser ? likingUser.profile_image : '',
+            });
           }
+
+          rewardInfo = {
+            is_ad: true,
+            reward: selfReward,
+            uplines_rewarded: uplines.length,
+            total_distributed: selfReward + (uplines.length * 0.05),
+            new_balance: parseFloat(wRows[0].balance).toFixed(2),
+            label: 'Ad Reel Like Reward',
+            message: `🎉 ₹0.10 credited for Ad Reel like! Rewarded ${uplines.length} upline levels.`,
+          };
         }
       } else {
         likedBy.splice(idx, 1);
@@ -994,10 +1074,10 @@ class PostgresDatabase {
           action_text: 'View Reel',
         });
       }
-      if (rewardInfo) {
+      if (rewardInfo && rewardInfo.reward > 0) {
         await this.addUserNotification(uId, {
           title: `+₹${rewardInfo.reward.toFixed(2)} Credited! 💰`,
-          message: `You received 10 paisa ad reward (${rewardInfo.label}) for liking "${video.title}".`,
+          message: `You earned ₹0.10 for liking Ad Reel "${video.title}". Uplines rewarded!`,
           type: 'earning',
         });
       }
@@ -1317,23 +1397,115 @@ class PostgresDatabase {
     }
   }
 
-  // --- Referrals ---
-  async getReferral(userId, reqHost) {
+  // --- 5-Level Referral Network & Downline Tree ---
+  async getReferralNetwork(userId, reqHost) {
     const user = await this.findUserById(userId);
     if (!user) return null;
-    const { rows } = await this.pool.query(
-      'SELECT id, name, username, created_at FROM users WHERE referred_by = $1 ORDER BY id DESC',
-      [user.referral_code]
+
+    const myRefCode = (user.referral_code || `TELSO${user.id}`).trim();
+    const myIdStr = String(user.id);
+
+    // Multi-level downlines query up to 5 levels
+    const query = `
+      WITH RECURSIVE downline_tree AS (
+        -- Level 1 (Direct Referrals)
+        SELECT 
+          u.id, u.name, u.username, u.profile_image, u.referral_code, u.referred_by, u.created_at,
+          1 AS level
+        FROM users u
+        WHERE (u.referred_by IS NOT NULL AND (UPPER(TRIM(u.referred_by)) = UPPER($1) OR TRIM(u.referred_by) = $2))
+        
+        UNION ALL
+        
+        -- Levels 2 through 5
+        SELECT 
+          u.id, u.name, u.username, u.profile_image, u.referral_code, u.referred_by, u.created_at,
+          dt.level + 1 AS level
+        FROM users u
+        JOIN downline_tree dt 
+          ON (u.referred_by IS NOT NULL AND (UPPER(TRIM(u.referred_by)) = UPPER(TRIM(COALESCE(dt.referral_code, ''))) OR TRIM(u.referred_by) = dt.id::text))
+        WHERE dt.level < 5
+      )
+      SELECT * FROM downline_tree ORDER BY level ASC, created_at DESC;
+    `;
+
+    const { rows: downlines } = await this.pool.query(query, [myRefCode, myIdStr]);
+
+    // Fetch transactions for this user related to referrals
+    const { rows: refTx } = await this.pool.query(
+      `SELECT * FROM transactions 
+       WHERE user_id = $1 
+         AND (title ILIKE '%Referral%' OR description ILIKE '%Referral%' OR description ILIKE '%downline%')
+       ORDER BY created_at DESC`,
+      [userId]
     );
-    const settings = (await this.getSettings()) || {};
-    const reward = parseFloat((settings.platform && settings.platform.referral_reward) || 50.0);
-    return {
-      referral_code: user.referral_code,
-      referral_link: `http://${reqHost}/invite/${user.referral_code}`,
-      total_referrals: rows.length,
-      total_earnings: rows.length * reward,
-      referrals: rows.map((r) => ({ ...r, created_at: toIso(r.created_at) })),
+
+    // Calculate individual earnings generated by each downline
+    const earningsMap = {};
+    let totalReferralEarnings = 0;
+    for (const tx of refTx) {
+      const amt = parseFloat(tx.amount || 0);
+      totalReferralEarnings += amt;
+      for (const d of downlines) {
+        if (
+          (tx.description && tx.description.includes(`[User #${d.id}]`)) ||
+          (tx.description && d.username && tx.description.includes(`@${d.username}`)) ||
+          (tx.description && d.name && tx.description.includes(d.name))
+        ) {
+          earningsMap[d.id] = (earningsMap[d.id] || 0) + amt;
+          break;
+        }
+      }
+    }
+
+    const levelStats = {
+      1: { level: 1, count: 0, total_earned: 0.00, label: 'Level 1 (Direct)' },
+      2: { level: 2, count: 0, total_earned: 0.00, label: 'Level 2' },
+      3: { level: 3, count: 0, total_earned: 0.00, label: 'Level 3' },
+      4: { level: 4, count: 0, total_earned: 0.00, label: 'Level 4' },
+      5: { level: 5, count: 0, total_earned: 0.00, label: 'Level 5' },
     };
+
+    const members = downlines.map((d) => {
+      const earned = parseFloat((earningsMap[d.id] || 0).toFixed(2));
+      if (levelStats[d.level]) {
+        levelStats[d.level].count++;
+        levelStats[d.level].total_earned = parseFloat((levelStats[d.level].total_earned + earned).toFixed(2));
+      }
+      return {
+        id: d.id,
+        name: d.name || d.username || `User #${d.id}`,
+        username: d.username || '',
+        profile_image: d.profile_image || '',
+        level: d.level,
+        referral_code: d.referral_code || '',
+        joined_at: toIso(d.created_at),
+        earned_from_user: earned,
+        earned_formatted: `₹${earned.toFixed(2)}`,
+      };
+    });
+
+    const host = reqHost || 'telsoworld.com';
+    return {
+      referral_code: myRefCode,
+      referral_link: `https://${host}/invite?ref=${myRefCode}`,
+      total_referrals: downlines.length,
+      total_earnings: parseFloat(totalReferralEarnings.toFixed(2)),
+      levels: Object.values(levelStats),
+      members,
+      referrals: members, // backwards compatibility
+      recent_transactions: refTx.slice(0, 30).map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        amount: parseFloat(t.amount || 0),
+        created_at: toIso(t.created_at),
+      })),
+    };
+  }
+
+  async getReferral(userId, reqHost) {
+    return this.getReferralNetwork(userId, reqHost);
   }
 
   // --- Web Links ---
