@@ -100,9 +100,9 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF0F0F14) : const Color(0xFFF6F7FB);
-    final cardBg = isDark ? const Color(0xFF16161E) : Colors.white;
-    final textColor = isDark ? Colors.white : const Color(0xFF14141E);
+    final bg = isDark ? Colors.black : Colors.white;
+    final cardBg = isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FA);
+    final textColor = isDark ? Colors.white : const Color(0xFF121212);
 
     // Exact balance computed directly from database wallet
     final balance = _parseDouble(_walletData?['balance'] ?? _walletData?['total_balance']);

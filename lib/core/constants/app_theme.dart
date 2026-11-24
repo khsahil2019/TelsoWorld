@@ -2,59 +2,75 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:telsoworld/core/constants/app_colors.dart';
 
+/// ---------------------------------------------------------------------------
+/// 🎨 AppTheme (Instagram-Style Dark & Light Themes)
+/// ---------------------------------------------------------------------------
+/// Dark Mode: True OLED Black (#000000), #121212 cards, #262626 borders
+/// Light Mode: Pure White (#FFFFFF), #FAFAFA cards, #EFEFEF borders
+/// ---------------------------------------------------------------------------
 class AppTheme {
-  // ── Dark Theme (Default) ──────────────────────────
+  // ── Instagram Dark Theme ────────────────────────────
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: const Color(0xFF0F0F14),
-      cardColor: const Color(0xFF16161E),
-      canvasColor: const Color(0xFF0F0F14),
+      scaffoldBackgroundColor: Colors.black,
+      cardColor: const Color(0xFF121212),
+      canvasColor: Colors.black,
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primaryPink,
-        secondary: Color(0xFFFF4081),
-        surface: Color(0xFF16161E),
+        secondary: Color(0xFFFF2A6D),
+        surface: Color(0xFF121212),
         onPrimary: Colors.white,
         onSurface: Colors.white,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF0F0F14),
+        backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         iconTheme: IconThemeData(color: Colors.white),
       ),
-      dividerColor: Colors.white10,
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Colors.black,
+        selectedItemColor: Colors.white,
+        unselectedItemColor: Color(0xFF8E8E8E),
+      ),
+      dividerColor: const Color(0xFF262626),
       textTheme: GoogleFonts.plusJakartaSansTextTheme(
         ThemeData.dark().textTheme,
       ),
     );
   }
 
-  // ── Light Theme ───────────────────────────────────
+  // ── Instagram Light Theme ───────────────────────────
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      scaffoldBackgroundColor: const Color(0xFFF6F7FB),
+      scaffoldBackgroundColor: Colors.white,
       cardColor: Colors.white,
       canvasColor: Colors.white,
       colorScheme: const ColorScheme.light(
         primary: AppColors.primaryPink,
-        secondary: Color(0xFFFF4081),
-        surface: Colors.white,
+        secondary: Color(0xFFFF2A6D),
+        surface: Color(0xFFFAFAFA),
         onPrimary: Colors.white,
-        onSurface: Color(0xFF14141E),
+        onSurface: Color(0xFF121212),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
-        foregroundColor: Color(0xFF14141E),
+        foregroundColor: Color(0xFF121212),
         elevation: 0.5,
         centerTitle: true,
-        iconTheme: IconThemeData(color: Color(0xFF14141E)),
+        iconTheme: IconThemeData(color: Color(0xFF121212)),
       ),
-      dividerColor: const Color(0xFFE5E7EB),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Colors.white,
+        selectedItemColor: Colors.black,
+        unselectedItemColor: Color(0xFF737373),
+      ),
+      dividerColor: const Color(0xFFEFEFEF),
       textTheme: GoogleFonts.plusJakartaSansTextTheme(
         ThemeData.light().textTheme,
       ),

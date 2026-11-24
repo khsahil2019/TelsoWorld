@@ -121,8 +121,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       return u.contains(q) || n.contains(q);
     }).toList();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? Colors.black : Colors.white;
+    final searchBg = isDark ? const Color(0xFF262626) : const Color(0xFFEFEFEF);
+    final textColor = isDark ? Colors.white : const Color(0xFF121212);
+    final hintColor = isDark ? const Color(0xFF8E8E8E) : const Color(0xFF737373);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: bg,
       body: SafeArea(
         child: Column(
           children: [
@@ -130,26 +136,26 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
               child: Container(
-                height: 42,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF262626),
+                  color: searchBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: TextField(
                   controller: _searchController,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  style: TextStyle(color: textColor, fontSize: 14),
                   onChanged: (val) => setState(() => _searchQuery = val),
                   decoration: InputDecoration(
                     hintText: 'Search creators, reels, sounds...',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 14),
-                    prefixIcon: const Icon(Icons.search_rounded, color: Colors.white60, size: 20),
+                    hintStyle: TextStyle(color: hintColor, fontSize: 14),
+                    prefixIcon: Icon(Icons.search_rounded, color: hintColor, size: 20),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? GestureDetector(
                             onTap: () {
                               _searchController.clear();
                               setState(() => _searchQuery = '');
                             },
-                            child: const Icon(Icons.cancel_rounded, color: Colors.white54, size: 18),
+                            child: Icon(Icons.cancel_rounded, color: hintColor, size: 18),
                           )
                         : null,
                     border: InputBorder.none,
@@ -167,11 +173,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     )
                   : RefreshIndicator(
                       color: const Color(0xFFD70F64),
-                      backgroundColor: const Color(0xFF161620),
+                      backgroundColor: isDark ? const Color(0xFF161620) : Colors.white,
                       onRefresh: _fetchExploreContent,
                       child: _searchQuery.isNotEmpty && filteredCreators.isNotEmpty
-                          ? _buildSearchResults(filteredCreators, filteredVideos)
-                          : _buildExploreGrid(filteredVideos),
+                          ? _buildSearchResults(filteredCreators, filteredVideos, isDark, textColor, hintColor)
+                          : _buildExploreGrid(filteredVideos, isDark: isDark),
                     ),
             ),
           ],
@@ -184,28 +190,31 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   Widget _buildSearchResults(
     List<Map<String, dynamic>> creators,
     List<Map<String, dynamic>> videos,
+    bool isDark,
+    Color textColor,
+    Color subTextColor,
   ) {
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       children: [
-        const Text(
+        Text(
           'Creators',
-          style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+          style: TextStyle(color: subTextColor, fontSize: 13, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         ...creators.map((c) => ListTile(
               contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
                 radius: 22,
-                backgroundColor: const Color(0xFF2E2E38),
+                backgroundColor: isDark ? const Color(0xFF2E2E38) : const Color(0xFFEFEFEF),
                 backgroundImage: (c['profile_image'] != null && c['profile_image'].toString().isNotEmpty)
                     ? NetworkImage(ApiEndpoints.mediaUrl(c['profile_image'].toString()))
                     : null,
                 child: (c['profile_image'] == null || c['profile_image'].toString().isEmpty)
                     ? Text(
                         c['username'].toString().isNotEmpty ? c['username'][0].toUpperCase() : 'U',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
                       )
                     : null,
               ),
@@ -213,7 +222,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 children: [
                   Text(
                     '@${c['username']}',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(width: 4),
                   const Icon(Icons.verified, color: Color(0xFF3897F0), size: 14),
@@ -221,13 +230,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               ),
               subtitle: Text(
                 c['name']?.toString() ?? '',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: subTextColor, fontSize: 12),
               ),
               trailing: OutlinedButton(
                 onPressed: () {},
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
+                  foregroundColor: textColor,
+                  side: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 ),
@@ -235,18 +244,18 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               ),
             )),
         const SizedBox(height: 16),
-        const Text(
+        Text(
           'Reels & Videos',
-          style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+          style: TextStyle(color: subTextColor, fontSize: 13, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        _buildExploreGrid(videos, shrinkWrap: true),
+        _buildExploreGrid(videos, shrinkWrap: true, isDark: isDark),
       ],
     );
   }
 
   /// 📸 Instagram 3-Column Explore Grid
-  Widget _buildExploreGrid(List<Map<String, dynamic>> items, {bool shrinkWrap = false}) {
+  Widget _buildExploreGrid(List<Map<String, dynamic>> items, {bool shrinkWrap = false, bool isDark = true}) {
     if (items.isEmpty) {
       return Center(
         child: SingleChildScrollView(
@@ -255,17 +264,17 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.search_off_rounded, size: 48, color: Colors.white24),
-              SizedBox(height: 12),
+            children: [
+              Icon(Icons.search_off_rounded, size: 48, color: isDark ? Colors.white24 : Colors.black26),
+              const SizedBox(height: 12),
               Text(
                 'No Reels Found',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(color: isDark ? Colors.white : const Color(0xFF121212), fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              SizedBox(height: 6),
+              const SizedBox(height: 6),
               Text(
                 'Try searching another username or topic.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: isDark ? Colors.white54 : const Color(0xFF737373), fontSize: 12),
               ),
             ],
           ),

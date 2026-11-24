@@ -104,26 +104,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? Colors.black : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF121212);
+    final subTextColor = isDark ? const Color(0xFF8E8E8E) : const Color(0xFF737373);
+    final dividerColor = isDark ? const Color(0xFF262626) : const Color(0xFFEFEFEF);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: bg,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Notifications',
           style: TextStyle(
-            color: Colors.white,
+            color: textColor,
             fontSize: 20,
             fontWeight: FontWeight.w800,
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+            icon: Icon(Icons.refresh_rounded, color: textColor),
             onPressed: _fetchNotifications,
           ),
         ],
@@ -137,9 +143,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.error_outline_rounded, color: Colors.white38, size: 48),
+                      Icon(Icons.error_outline_rounded, color: subTextColor, size: 48),
                       const SizedBox(height: 12),
-                      Text(_error!, style: const TextStyle(color: Colors.white70)),
+                      Text(_error!, style: TextStyle(color: textColor)),
                       const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: _fetchNotifications,
@@ -153,24 +159,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.favorite_border_rounded, size: 64, color: Colors.white24),
-                          SizedBox(height: 16),
+                        children: [
+                          Icon(Icons.favorite_border_rounded, size: 64, color: subTextColor),
+                          const SizedBox(height: 16),
                           Text(
                             'Activity On Your Posts',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: textColor,
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 40),
+                            padding: const EdgeInsets.symmetric(horizontal: 40),
                             child: Text(
                               'When people like or comment on your reels and photos, you will see them here.',
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
+                              style: TextStyle(color: subTextColor, fontSize: 13, height: 1.4),
                             ),
                           ),
                         ],
@@ -180,9 +186,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       onRefresh: _fetchNotifications,
                       color: AppColors.primaryPink,
                       child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                         itemCount: _notifications.length,
-                        separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
+                        separatorBuilder: (_, __) => Divider(color: dividerColor, height: 1),
                         itemBuilder: (context, index) {
                           final item = _notifications[index];
                           final title = item['title']?.toString() ?? 'Notification';
@@ -197,7 +203,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               children: [
                                 CircleAvatar(
                                   radius: 22,
-                                  backgroundColor: const Color(0xFF1E1E24),
+                                  backgroundColor: isDark ? const Color(0xFF1E1E24) : const Color(0xFFEFEFEF),
                                   backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
                                   child: avatar.isEmpty
                                       ? Icon(_getIcon(type), color: _getIconColor(type), size: 22)
@@ -208,8 +214,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   right: 0,
                                   child: Container(
                                     padding: const EdgeInsets.all(3),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.black,
+                                    decoration: BoxDecoration(
+                                      color: bg,
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(_getIcon(type), color: _getIconColor(type), size: 12),
@@ -219,8 +225,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                             title: Text(
                               title,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: textColor,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                               ),
@@ -233,7 +239,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     padding: const EdgeInsets.only(top: 2),
                                     child: Text(
                                       message,
-                                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                      style: TextStyle(color: subTextColor, fontSize: 13),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -243,7 +249,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     padding: const EdgeInsets.only(top: 4),
                                     child: Text(
                                       dateStr.length > 10 ? dateStr.substring(0, 10) : dateStr,
-                                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                      style: TextStyle(color: subTextColor, fontSize: 11),
                                     ),
                                   ),
                               ],

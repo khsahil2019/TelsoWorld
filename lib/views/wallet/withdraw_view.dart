@@ -279,12 +279,12 @@ class _WithdrawScreenState extends State<WithdrawScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDark ? const Color(0xFF16161E) : Colors.white;
-    final inputBg = isDark ? const Color(0xFF222230) : const Color(0xFFF1F3F7);
-    final textColor = isDark ? Colors.white : const Color(0xFF161622);
+    final cardBg = isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FA);
+    final inputBg = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFEFEFEF);
+    final textColor = isDark ? Colors.white : const Color(0xFF121212);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F0F14) : const Color(0xFFF6F7FB),
+      backgroundColor: isDark ? Colors.black : Colors.white,
       appBar: AppBar(
         title: const Text('Withdraw Funds', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: true,

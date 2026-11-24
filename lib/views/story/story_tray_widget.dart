@@ -216,6 +216,13 @@ class _StoryTrayWidgetState extends State<StoryTrayWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final yourStoryTextColor = isDark ? Colors.white70 : const Color(0xFF262626);
+    final groupNameColor = isDark ? Colors.white : const Color(0xFF262626);
+    final ringInnerBg = isDark ? Colors.black : Colors.white;
+    final myAvatarBorder = isDark ? Colors.white24 : const Color(0xFFDBDBDB);
+    final myAvatarBg = isDark ? const Color(0xFF22222E) : const Color(0xFFEFEFEF);
+
     return Container(
       height: 98,
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -243,8 +250,8 @@ class _StoryTrayWidgetState extends State<StoryTrayWidget> {
                           height: 60,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white24, width: 1.5),
-                            color: const Color(0xFF22222E),
+                            border: Border.all(color: myAvatarBorder, width: 1.5),
+                            color: myAvatarBg,
                           ),
                           child: ClipOval(
                             child: _isPostingStory
@@ -259,9 +266,9 @@ class _StoryTrayWidgetState extends State<StoryTrayWidget> {
                                         width: 60,
                                         height: 60,
                                         errorBuilder: (_, __, ___) =>
-                                            const Icon(Icons.person, color: Colors.white70, size: 30),
+                                            Icon(Icons.person, color: isDark ? Colors.white70 : Colors.black54, size: 30),
                                       )
-                                    : const Icon(Icons.person, color: Colors.white70, size: 30)),
+                                    : Icon(Icons.person, color: isDark ? Colors.white70 : Colors.black54, size: 30)),
                           ),
                         );
                       }),
@@ -281,9 +288,9 @@ class _StoryTrayWidgetState extends State<StoryTrayWidget> {
                     ],
                   ),
                   const SizedBox(height: 5),
-                  const Text(
+                  Text(
                     'Your story',
-                    style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: yourStoryTextColor, fontSize: 11, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -326,9 +333,9 @@ class _StoryTrayWidgetState extends State<StoryTrayWidget> {
                   ),
                   child: Container(
                     padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.black,
+                      color: ringInnerBg,
                     ),
                     child: CircleAvatar(
                       backgroundImage: group.profileImage.isNotEmpty
@@ -352,7 +359,7 @@ class _StoryTrayWidgetState extends State<StoryTrayWidget> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: groupNameColor, fontSize: 11, fontWeight: FontWeight.w500),
                   ),
                 ),
               ],

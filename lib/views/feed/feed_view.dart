@@ -499,8 +499,9 @@ class _FeedScreenState extends State<FeedScreen>
     }
 
     // 📱 HOME TAB: Clean Instagram Feed (Starts strictly below stories!)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: isDark ? Colors.black : Colors.white,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -1961,6 +1962,9 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final topBarColor = isDark ? Colors.white : Colors.black;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       child: Row(
@@ -1977,7 +1981,7 @@ class _TopBar extends StatelessWidget {
                 Text(
                   'Telso World',
                   style: GoogleFonts.lobster(
-                    color: Colors.white,
+                    color: topBarColor,
                     fontSize: 22,
                     fontWeight: FontWeight.w400,
                     letterSpacing: 0.2,
@@ -2003,9 +2007,9 @@ class _TopBar extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   color: Colors.transparent,
-                  child: const Icon(
+                  child: Icon(
                     Icons.add_box_outlined,
-                    color: Colors.white,
+                    color: topBarColor,
                     size: 26,
                   ),
                 ),
@@ -2024,9 +2028,9 @@ class _TopBar extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   color: Colors.transparent,
-                  child: const Icon(
+                  child: Icon(
                     Icons.favorite_border_rounded,
-                    color: Colors.white,
+                    color: topBarColor,
                     size: 26,
                   ),
                 ),
@@ -2049,9 +2053,9 @@ class _TopBar extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   color: Colors.transparent,
-                  child: const Icon(
+                  child: Icon(
                     Icons.near_me_outlined,
-                    color: Colors.white,
+                    color: topBarColor,
                     size: 26,
                   ),
                 ),

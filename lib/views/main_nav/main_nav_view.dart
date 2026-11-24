@@ -100,11 +100,15 @@ class _MainNavViewState extends State<MainNavView> {
         // Safe exit
         SystemNavigator.pop();
       },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Obx(() {
-          final currentTab = controller.currentIndex.value;
-          return IndexedStack(
+      child: Obx(() {
+        final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
+        final currentTab = controller.currentIndex.value;
+        final isReels = currentTab == 1;
+        final scaffoldBg = isReels ? Colors.black : (isDarkTheme ? Colors.black : Colors.white);
+
+        return Scaffold(
+          backgroundColor: scaffoldBg,
+          body: IndexedStack(
             index: currentTab,
             children: [
               // 0: Home Feed (Top bar, Stories tray, Feed)
@@ -118,15 +122,15 @@ class _MainNavViewState extends State<MainNavView> {
               // 4: Profile
               const ProfileScreen(),
             ],
-          );
-        }),
-        bottomNavigationBar: Obx(() => _buildCustomBottomBar()),
-      ),
+          ),
+          bottomNavigationBar: _buildCustomBottomBar(isDarkTheme, isReels),
+        );
+      }),
     );
   }
 
   /// 🌟 Instagram Exact 5-Icon Clean Bottom Navigation Bar
-  Widget _buildCustomBottomBar() {
+  Widget _buildCustomBottomBar(bool isDarkTheme, bool isReels) {
     final int current = controller.currentIndex.value;
     final storage = Get.isRegistered<StorageService>()
         ? Get.find<StorageService>()
@@ -135,12 +139,21 @@ class _MainNavViewState extends State<MainNavView> {
         ? storage!.profileImage.value
         : (storage?.getProfileImage() ?? '');
 
+    final barColor = isReels ? Colors.black : (isDarkTheme ? Colors.black : Colors.white);
+    final borderColor = isReels
+        ? Colors.white.withValues(alpha: 0.12)
+        : (isDarkTheme ? const Color(0xFF262626) : const Color(0xFFDBDBDB));
+    final activeIconColor = isReels ? Colors.white : (isDarkTheme ? Colors.white : Colors.black);
+    final inactiveIconColor = isReels
+        ? Colors.white.withValues(alpha: 0.72)
+        : (isDarkTheme ? const Color(0xFF8E8E8E) : const Color(0xFF737373));
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black,
+        color: barColor,
         border: Border(
           top: BorderSide(
-            color: Colors.white.withValues(alpha: 0.12),
+            color: borderColor,
             width: 0.6,
           ),
         ),
@@ -159,6 +172,8 @@ class _MainNavViewState extends State<MainNavView> {
                 selectedIndex: current,
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_filled,
+                activeColor: activeIconColor,
+                inactiveColor: inactiveIconColor,
               ),
 
               // 2. Reels Icon
@@ -167,6 +182,8 @@ class _MainNavViewState extends State<MainNavView> {
                 selectedIndex: current,
                 icon: Icons.smart_display_outlined,
                 activeIcon: Icons.smart_display_rounded,
+                activeColor: activeIconColor,
+                inactiveColor: inactiveIconColor,
               ),
 
               // 3. Direct Message / Messenger Icon
@@ -175,6 +192,8 @@ class _MainNavViewState extends State<MainNavView> {
                 selectedIndex: current,
                 icon: Icons.near_me_outlined,
                 activeIcon: Icons.send_rounded,
+                activeColor: activeIconColor,
+                inactiveColor: inactiveIconColor,
               ),
 
               // 4. Search Icon
@@ -183,6 +202,8 @@ class _MainNavViewState extends State<MainNavView> {
                 selectedIndex: current,
                 icon: Icons.search_rounded,
                 activeIcon: Icons.search,
+                activeColor: activeIconColor,
+                inactiveColor: inactiveIconColor,
               ),
 
               // 5. Profile Avatar Tab
@@ -190,6 +211,7 @@ class _MainNavViewState extends State<MainNavView> {
                 index: 4,
                 selectedIndex: current,
                 avatarUrl: userAvatar,
+                activeColor: activeIconColor,
               ),
             ],
           ),
@@ -204,6 +226,8 @@ class _MainNavViewState extends State<MainNavView> {
     required int selectedIndex,
     required IconData icon,
     required IconData activeIcon,
+    required Color activeColor,
+    required Color inactiveColor,
     int badgeCount = 0,
   }) {
     final bool isSelected = selectedIndex == index;
@@ -221,9 +245,7 @@ class _MainNavViewState extends State<MainNavView> {
             children: [
               Icon(
                 isSelected ? activeIcon : icon,
-                color: isSelected
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.72),
+                color: isSelected ? activeColor : inactiveColor,
                 size: 28,
               ),
               if (badgeCount > 0 && !isSelected)
@@ -254,6 +276,7 @@ class _MainNavViewState extends State<MainNavView> {
     required int index,
     required int selectedIndex,
     required String avatarUrl,
+    required Color activeColor,
   }) {
     final bool isSelected = selectedIndex == index;
 
@@ -272,7 +295,7 @@ class _MainNavViewState extends State<MainNavView> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: isSelected ? Colors.white : Colors.transparent,
+                color: isSelected ? activeColor : Colors.transparent,
                 width: 1.8,
               ),
             ),
